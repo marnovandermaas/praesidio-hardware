@@ -15,14 +15,16 @@ import GetPut      :: *;
 // ================================================================
 // Praesidio MemoryShim interface
 
-interface Praesidio_MemoryShim #();
+interface Praesidio_MemoryShim
+
 endinterface
 
 // ================================================================
 // Praesidio MemoryShim module
 
-module mkPraesidio_MemoryShim #();
-endmodule
+module mkPraesidio_MemoryShim (Praesidio_MemoryShim);
+
+endmodule: mkPraesidio_MemoryShim
 
 // ================================================================
 
