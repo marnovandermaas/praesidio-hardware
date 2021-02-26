@@ -13,6 +13,11 @@ import Connectable :: *;
 import GetPut      :: *;
 
 // ================================================================
+// BlueStuff imports
+
+import AXI4 :: *;
+
+// ================================================================
 // Praesidio MemoryShim interface
 
 interface Praesidio_MemoryShim
@@ -22,7 +27,7 @@ endinterface
 // ================================================================
 // Praesidio MemoryShim module
 
-module mkPraesidio_MemoryShim (Praesidio_MemoryShim);
+module mkPraesidio_MemoryShim (Praesidio_MemoryShim, AXI4_InitiatorTarget_Shim);
 
 endmodule: mkPraesidio_MemoryShim
 
