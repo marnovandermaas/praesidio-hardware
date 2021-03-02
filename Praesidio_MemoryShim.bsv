@@ -9,13 +9,17 @@ package Praesidio_MemoryShim;
 // ================================================================
 // BSV library imports
 
-import Connectable :: *;
-import GetPut      :: *;
+import Connectable  :: *;
+import GetPut       :: *;
+import FIFOF        :: *;
+import SpecialFIFOs :: *;
 
 // ================================================================
 // BlueStuff imports
 
 import AXI4 :: *;
+// BlueBasics import
+import SourceSink :: *;
 
 // ================================================================
 // Praesidio MemoryShim interface
