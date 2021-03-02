@@ -1,6 +1,6 @@
 // Copyright (c) 2021 Marno van der Maas
 
-package Praesido_MemoryShim;
+package Praesidio_MemoryShim;
 
 // ================================================================
 // Separate interfaces for input-side and output-side of FIFOF.
