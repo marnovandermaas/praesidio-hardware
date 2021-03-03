@@ -49,35 +49,82 @@ endinterface
 // Praesidio MemoryShim module
 
 module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(a, b, c, d, e, f, g, h));
-  let awff <- mkBypassFIFOF;
-  let  wff <- mkBypassFIFOF;
-  let  bff <- mkBypassFIFOF;
-  let arff <- mkBypassFIFOF;
-  let  rff <- mkBypassFIFOF;
 
+  // Shims
+  let inShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
+  let outShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
+  // handy names
+  let  inAW =  inShim.initiator.aw;
+  let  inW  =  inShim.initiator.w;
+  let  inB  =  inShim.initiator.b;
+  let  inAR =  inShim.initiator.ar;
+  let  inR  =  inShim.initiator.r;
+  let outAW = outShim.target.aw;
+  let outW  = outShim.target.w;
+  let outB  = outShim.target.b;
+  let outAR = outShim.target.ar;
+  let outR  = outShim.target.r;
+  // internal state
+
+  // DEBUG //
+  //////////////////////////////////////////////////////////////////////////////
+  Bool debug = True;
+  (* fire_when_enabled *)
+  rule dbg (debug);
+    Fmt dbg_str = $format("inAW.canPeek:\t ", fshow(inAW.canPeek))
+                + $format("\toutAW.canPut:\t ", fshow(outAW.canPut))
+                + $format("\n\tinW.canPeek:\t ", fshow(inW.canPeek))
+                + $format("\toutW.canPut:\t ", fshow(outW.canPut))
+                + $format("\n\tinB.canPut:\t ", fshow(inB.canPut))
+                + $format("\toutB.canPeek:\t ", fshow(outB.canPeek))
+                + $format("\n\tinAR.canPeek:\t ", fshow(inAR.canPeek))
+                + $format("\toutAR.canPut:\t ", fshow(outAR.canPut))
+                + $format("\n\tinR.canPut:\t ", fshow(inR.canPut))
+                + $format("\toutR.canPeek:\t ", fshow(outR.canPeek));
+    $display("%0t: ", $time, dbg_str);
+  endrule
+
+  // Writes
+  //////////////////////////////////////////////////////////////////////////////
+  rule forward_write_req;
+    outAW.put(inAw.peek);
+    outW.put(get(inW));
+    inAW.drop;
+    // DEBUG //
+    if (debug) $display("%0t: forward_write_req", $time,
+                        "\n", fshow(inAw.peek), "\n", fshow(inW.peek));
+  endrule
+  rule handle_write_rsp;
+    outB.drop;
+    inB.put(outB.peek);
+    // DEBUG //
+    if (debug) $display("%0t: handle_write_rsp - ", $time, fshow(outB.peek));
+  endrule
+
+  // Reads
+  //////////////////////////////////////////////////////////////////////////////
+  rule forward_read_req;
+    outAR.put(inAR.peek);
+    inAR.drop;
+    // DEBUG //
+    if (debug) $display("%0t: forward_read_req", $time,
+                        "\n", fshow(inAR.peek));
+  endrule
+  rule forward_read_rsp;
+    outR.drop;
+    inR.put(outR.peek);
+    // DEBUG //
+    if (debug) $display("%0t: forward_read_rsp - ", $time, fshow(outR.peek));
+  endrule
+
+  // Interface
+  //////////////////////////////////////////////////////////////////////////////
   method clear = action
-    awff.clear;
-    wff.clear;
-    bff.clear;
-    arff.clear;
-    rff.clear;
+    inShim.clear;
+    outShim.clear;
   endaction;
-
-  interface initiator = interface AXI4_Initiator;
-    interface aw = toSource(awff);
-    interface  w = toSource(wff);
-    interface  b = toSink(bff);
-    interface ar = toSource(arff);
-    interface  r = toSink(rff);
-  endinterface;
-
-  interface target = interface AXI4_Target;
-    interface aw = toSink(awff);
-    interface  w = toSink(wff);
-    interface  b = toSource(bff);
-    interface ar = toSink(arff);
-    interface  r = toSource(rff);
-  endinterface;
+  interface target    =  inShim.target;
+  interface initiator = outShim.initiator;
 
 endmodule: mkPraesidio_MemoryShim
 
