@@ -87,12 +87,13 @@ module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(a, b, c, d, e, f, g, h));
   // Writes
   //////////////////////////////////////////////////////////////////////////////
   rule forward_write_req;
-    outAW.put(inAw.peek);
-    outW.put(get(inW));
+    outAW.put(inAW.peek);
+    outW.put(inW.peek);
     inAW.drop;
+    inW.drop;
     // DEBUG //
     if (debug) $display("%0t: forward_write_req", $time,
-                        "\n", fshow(inAw.peek), "\n", fshow(inW.peek));
+                        "\n", fshow(inAW.peek), "\n", fshow(inW.peek));
   endrule
   rule handle_write_rsp;
     outB.drop;
