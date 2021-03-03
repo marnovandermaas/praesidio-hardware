@@ -68,9 +68,9 @@ module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(a, b, c, d, e, f, g, h));
 
   // DEBUG //
   //////////////////////////////////////////////////////////////////////////////
-  Bool debug = True;
+  Bool debug = False;
   (* fire_when_enabled *)
-  rule dbg (debug);
+  rule dbg (False);
     Fmt dbg_str = $format("inAW.canPeek:\t ", fshow(inAW.canPeek))
                 + $format("\toutAW.canPut:\t ", fshow(outAW.canPut))
                 + $format("\n\tinW.canPeek:\t ", fshow(inW.canPeek))
