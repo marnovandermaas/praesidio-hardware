@@ -13,6 +13,7 @@ import Connectable  :: *;
 import GetPut       :: *;
 import FIFOF        :: *;
 import SpecialFIFOs :: *;
+import BRAM :: *;
 
 // ================================================================
 // BlueStuff imports
@@ -51,7 +52,7 @@ endinterface
 module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(a, b, c, d, e, f, g, h));
 
   // Shims
-  let inShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
+  let  inShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
   let outShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
   // handy names
   let  inAW =  inShim.initiator.aw;
@@ -65,6 +66,9 @@ module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(a, b, c, d, e, f, g, h));
   let outAR = outShim.target.ar;
   let outR  = outShim.target.r;
   // internal state
+  BRAM_Configure cfg = defaultValue;
+  cfg.memorySize = 4*1024; // 1 GiB DRAM and a one bit per 4 KiB page, this is 512*1024/8 Bytes = 32 KiB, assuming 64 bit dram words this is 32*1024*8/64 = 4*1024
+  BRAM2Port#(UInt#(12), Bit#(64)) bram <- mkBRAM2Server(cfg);
 
   // DEBUG //
   //////////////////////////////////////////////////////////////////////////////
