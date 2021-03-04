@@ -49,7 +49,7 @@ endinterface
 // ================================================================
 // Praesidio MemoryShim module
 
-module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(a, b, c, d, e, f, g, h));
+module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_));
 
   // Shims
   let  inShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
@@ -65,10 +65,15 @@ module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(a, b, c, d, e, f, g, h));
   let outB  = outShim.target.b;
   let outAR = outShim.target.ar;
   let outR  = outShim.target.r;
-  // internal state
+  // internal bram
   BRAM_Configure cfg = defaultValue;
-  cfg.memorySize = 4*1024; // 1 GiB DRAM and a one bit per 4 KiB page, this is 512*1024/8 Bytes = 32 KiB, assuming 64 bit dram words this is 32*1024*8/64 = 4*1024
-  BRAM2Port#(UInt#(12), Bit#(64)) bram <- mkBRAM2Server(cfg);
+  cfg.memorySize = 8*1024; // 1 GiB DRAM and a two bits per 4 KiB page, this is 2*512*1024/8 Bytes = 64 KiB, assuming 64 bit dram words this is 64*1024*8/64 = 8*1024
+  BRAM2Port#(UInt#(13), Bit#(64)) bram <- mkBRAM2Server(cfg);
+  // internal fifos
+  let internal_fifof_depth = cfg.outFIFODepth;
+  FIFOF #(AXI4_AWFlit#(id_, addr_, awuser_)) awFF <- mkSizedFIFOF(internal_fifof_depth);
+  FIFOF #( AXI4_WFlit#(data_,       wuser_))  wFF <- mkSizedFIFOF(internal_fifof_depth);
+  FIFOF #(AXI4_ARFlit#(id_, addr_, aruser_)) arFF <- mkSizedFIFOF(internal_fifof_depth);
 
   // DEBUG //
   //////////////////////////////////////////////////////////////////////////////
@@ -90,14 +95,25 @@ module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(a, b, c, d, e, f, g, h));
 
   // Writes
   //////////////////////////////////////////////////////////////////////////////
-  rule forward_write_req;
-    outAW.put(inAW.peek);
-    outW.put(inW.peek);
+  rule enq_write_req;
+    awFF.enq(inAW.peek);
+    wFF.enq(inW.peek);
     inAW.drop;
     inW.drop;
+    //TODO make request to bram.
     // DEBUG //
-    if (debug) $display("%0t: forward_write_req", $time,
+    if (debug) $display("%0t: enq_write_req", $time,
                         "\n", fshow(inAW.peek), "\n", fshow(inW.peek));
+  endrule
+  rule deq_write_req;
+    //TODO make this conditional based off of bram response
+    outAW.put(awFF.first);
+    outW.put(wFF.first);
+    awFF.deq;
+    wFF.deq;
+    // DEBUG //
+    if (debug) $display("%0t: deq_write_req", $time,
+                        "\n", fshow(awFF.first), "\n", fshow(wFF.first));
   endrule
   rule handle_write_rsp;
     outB.drop;
@@ -108,12 +124,21 @@ module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(a, b, c, d, e, f, g, h));
 
   // Reads
   //////////////////////////////////////////////////////////////////////////////
-  rule forward_read_req;
-    outAR.put(inAR.peek);
+  rule enq_read_req;
+    arFF.enq(inAR.peek);
     inAR.drop;
+    //TODO send request to internal bram.
     // DEBUG //
-    if (debug) $display("%0t: forward_read_req", $time,
+    if (debug) $display("%0t: enq_read_req", $time,
                         "\n", fshow(inAR.peek));
+  endrule
+  rule deq_read_req;
+    outAR.put(arFF.first);
+    arFF.deq;
+    //TODO make this conditional based on BRAM result.
+    // DEBUG //
+    if (debug) $display("%0t: deq_read_req", $time,
+                        "\n", fshow(arFF.first));
   endrule
   rule forward_read_rsp;
     outR.drop;
