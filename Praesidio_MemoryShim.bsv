@@ -29,16 +29,20 @@ interface Praesidio_MemoryShim #(
     numeric type id_,
     numeric type addr_,
     numeric type data_,
-    numeric type user_);
+    numeric type awuser_,
+    numeric type wuser_,
+    numeric type buser_,
+    numeric type aruser_,
+    numeric type ruser_);
   method Action clear;
   interface AXI4_Initiator #(
-    id_, addr_, data_, user_, user_, user_, user_, user_
+    id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
   ) initiator;
   interface AXI4_Target #(
-    id_, addr_, data_, user_, user_, user_, user_, user_
+    id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
   ) target;
   //interface AXI4_Target#(
-  //  id_, addr_, data_, user_, user_, user_, user_, user_
+  //  id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
   //) configure;
 endinterface
 
@@ -47,7 +51,7 @@ endinterface
 
 module mkPraesidio_MemoryShim
     #(Bit#(addr_) start_address, Bit#(addr_)end_address)
-    (Praesidio_MemoryShim #(id_, addr_, data_, user_))
+    (Praesidio_MemoryShim #(id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_))
 //TODO provisos: start_address < end_address, addr_ > 12
   provisos();
 
@@ -139,7 +143,8 @@ module mkPraesidio_MemoryShim
       outAW.put(awFF.first);
       outW.put(wFF.first);
     end else begin
-      inB.put(AXI4_BFlit { bid: awFF.first.awid, bresp: OKAY,buser: awFF.first.awuser});
+      //TODO check whether buser should actually be 0
+      inB.put(AXI4_BFlit { bid: awFF.first.awid, bresp: OKAY, buser: 0});
     end
     // DEBUG //
     if (debug) $display("%0t: deq_write_req", $time,
