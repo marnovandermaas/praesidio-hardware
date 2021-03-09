@@ -29,27 +29,27 @@ interface Praesidio_MemoryShim #(
     numeric type id_,
     numeric type addr_,
     numeric type data_,
-    numeric type awuser_,
-    numeric type wuser_,
-    numeric type buser_,
-    numeric type aruser_,
-    numeric type ruser_);
+    numeric type user_);
   method Action clear;
   interface AXI4_Initiator #(
-    id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
+    id_, addr_, data_, user_, user_, user_, user_, user_
   ) initiator;
   interface AXI4_Target #(
-    id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
+    id_, addr_, data_, user_, user_, user_, user_, user_
   ) target;
   //interface AXI4_Target#(
-  //  id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
+  //  id_, addr_, data_, user_, user_, user_, user_, user_
   //) configure;
 endinterface
 
 // ================================================================
 // Praesidio MemoryShim module
 
-module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_));
+module mkPraesidio_MemoryShim
+    #(Bit#(addr_) start_address, Bit#(addr_)end_address)
+    (Praesidio_MemoryShim #(id_, addr_, data_, user_))
+//TODO provisos: start_address < end_address, addr_ > 12
+  provisos();
 
   // Shims
   let  inShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
@@ -71,9 +71,9 @@ module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(id_, addr_, data_, awuser_
   BRAM2Port#(UInt#(13), Bit#(64)) bram <- mkBRAM2Server(cfg);
   // internal fifos
   let internal_fifof_depth = cfg.outFIFODepth;
-  FIFOF #(AXI4_AWFlit#(id_, addr_, awuser_)) awFF <- mkSizedFIFOF(internal_fifof_depth);
-  FIFOF #( AXI4_WFlit#(data_,       wuser_))  wFF <- mkSizedFIFOF(internal_fifof_depth);
-  FIFOF #(AXI4_ARFlit#(id_, addr_, aruser_)) arFF <- mkSizedFIFOF(internal_fifof_depth);
+  FIFOF #(AXI4_AWFlit#(id_, addr_, user_)) awFF <- mkSizedFIFOF(internal_fifof_depth);
+  FIFOF #( AXI4_WFlit#(data_,      user_))  wFF <- mkSizedFIFOF(internal_fifof_depth);
+  FIFOF #(AXI4_ARFlit#(id_, addr_, user_)) arFF <- mkSizedFIFOF(internal_fifof_depth);
 
   // DEBUG //
   //////////////////////////////////////////////////////////////////////////////
@@ -93,6 +93,24 @@ module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(id_, addr_, data_, awuser_
     $display("%0t: ", $time, dbg_str);
   endrule
 
+  // Common functions
+  //////////////////////////////////////////////////////////////////////////////
+  function Bit#(addr_) get_page_offset(Bit#(addr_) address);
+    let offset = address - start_address;
+    let page_number = offset >> 12;
+    return page_number;
+  endfunction
+
+  function UInt#(13) get_bram_addr(Bit#(addr_) address);
+    let page_number = get_page_offset(address);
+    let bram_addr = page_number / 64;
+    return unpack(bram_addr[12:0]);
+  endfunction
+
+  function Bool is_in_range(Bit#(addr_) address);
+    return (address >= start_address) && (address < end_address);
+  endfunction
+
   // Writes
   //////////////////////////////////////////////////////////////////////////////
   rule enq_write_req;
@@ -100,21 +118,34 @@ module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(id_, addr_, data_, awuser_
     wFF.enq(inW.peek);
     inAW.drop;
     inW.drop;
-    //TODO make request to bram.
+    bram.portA.request.put(BRAMRequest{
+      write: False,
+      responseOnWrite: False,
+      address: get_bram_addr(inAW.peek.awaddr),
+      datain: 0
+    });
     // DEBUG //
     if (debug) $display("%0t: enq_write_req", $time,
                         "\n", fshow(inAW.peek), "\n", fshow(inW.peek));
   endrule
+
   rule deq_write_req;
-    //TODO make this conditional based off of bram response
-    outAW.put(awFF.first);
-    outW.put(wFF.first);
+    Bit#(64) rsp <- bram.portA.response.get;
+    let page_offset = get_page_offset(awFF.first.awaddr);
     awFF.deq;
     wFF.deq;
+    Bit#(64) mask = 1 << (page_offset % 64);
+    if((rsp & mask) != 0) begin
+      outAW.put(awFF.first);
+      outW.put(wFF.first);
+    end else begin
+      inB.put(AXI4_BFlit { bid: awFF.first.awid, bresp: OKAY,buser: awFF.first.awuser});
+    end
     // DEBUG //
     if (debug) $display("%0t: deq_write_req", $time,
                         "\n", fshow(awFF.first), "\n", fshow(wFF.first));
   endrule
+
   rule handle_write_rsp;
     outB.drop;
     inB.put(outB.peek);
@@ -132,6 +163,7 @@ module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(id_, addr_, data_, awuser_
     if (debug) $display("%0t: enq_read_req", $time,
                         "\n", fshow(inAR.peek));
   endrule
+
   rule deq_read_req;
     outAR.put(arFF.first);
     arFF.deq;
@@ -140,6 +172,7 @@ module mkPraesidio_MemoryShim (Praesidio_MemoryShim #(id_, addr_, data_, awuser_
     if (debug) $display("%0t: deq_read_req", $time,
                         "\n", fshow(arFF.first));
   endrule
+
   rule forward_read_rsp;
     outR.drop;
     inR.put(outR.peek);
