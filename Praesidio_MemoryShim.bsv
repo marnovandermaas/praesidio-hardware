@@ -75,9 +75,9 @@ module mkPraesidio_MemoryShim
   BRAM2Port#(UInt#(13), Bit#(64)) bram <- mkBRAM2Server(cfg);
   // internal fifos
   let internal_fifof_depth = cfg.outFIFODepth;
-  FIFOF #(AXI4_AWFlit#(id_, addr_, user_)) awFF <- mkSizedFIFOF(internal_fifof_depth);
-  FIFOF #( AXI4_WFlit#(data_,      user_))  wFF <- mkSizedFIFOF(internal_fifof_depth);
-  FIFOF #(AXI4_ARFlit#(id_, addr_, user_)) arFF <- mkSizedFIFOF(internal_fifof_depth);
+  FIFOF #(AXI4_AWFlit#(id_, addr_, awuser_)) awFF <- mkSizedFIFOF(internal_fifof_depth);
+  FIFOF #( AXI4_WFlit#(data_,       wuser_))  wFF <- mkSizedFIFOF(internal_fifof_depth);
+  FIFOF #(AXI4_ARFlit#(id_, addr_, aruser_)) arFF <- mkSizedFIFOF(internal_fifof_depth);
 
   // DEBUG //
   //////////////////////////////////////////////////////////////////////////////
@@ -107,7 +107,7 @@ module mkPraesidio_MemoryShim
 
   function UInt#(13) get_bram_addr(Bit#(addr_) address);
     let page_number = get_page_offset(address);
-    let bram_addr = page_number / 64;
+    let bram_addr = page_number / (64/2);
     return unpack(bram_addr[12:0]);
   endfunction
 
@@ -136,9 +136,9 @@ module mkPraesidio_MemoryShim
   rule deq_write_req;
     Bit#(64) rsp <- bram.portA.response.get;
     let page_offset = get_page_offset(awFF.first.awaddr);
+    Bit#(64) mask = 1 << ((page_offset % (64/2)) * 2);
     awFF.deq;
     wFF.deq;
-    Bit#(64) mask = 1 << (page_offset % 64);
     if((rsp & mask) != 0) begin
       outAW.put(awFF.first);
       outW.put(wFF.first);
@@ -163,16 +163,28 @@ module mkPraesidio_MemoryShim
   rule enq_read_req;
     arFF.enq(inAR.peek);
     inAR.drop;
-    //TODO send request to internal bram.
+    bram.portA.request.put(BRAMRequest{
+      write: False,
+      responseOnWrite: False,
+      address: get_bram_addr(inAR.peek.araddr),
+      datain: 0
+    });
     // DEBUG //
     if (debug) $display("%0t: enq_read_req", $time,
                         "\n", fshow(inAR.peek));
   endrule
 
   rule deq_read_req;
-    outAR.put(arFF.first);
+    Bit#(64) rsp <- bram.portA.response.get;
+    let page_offset = get_page_offset(arFF.first.araddr);
+    Bit#(64) mask = 3 << ((page_offset % (64/2)) * 2);
     arFF.deq;
-    //TODO make this conditional based on BRAM result.
+    if((rsp & mask) != 0) begin
+      outAR.put(arFF.first);
+    end else begin
+      //TODO check whether you need to send multiple -1 back.
+      inR.put(AXI4_RFlit{ rid: arFF.first.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
+    end
     // DEBUG //
     if (debug) $display("%0t: deq_read_req", $time,
                         "\n", fshow(arFF.first));
