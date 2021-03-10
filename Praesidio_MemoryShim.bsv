@@ -49,6 +49,8 @@ endinterface
 // ================================================================
 // Praesidio MemoryShim module
 
+typedef Bit#(64) BramWordType;
+
 module mkPraesidio_MemoryShim
     #(Bit#(addr_) start_address, Bit#(addr_)end_address)
     (Praesidio_MemoryShim #(id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_))
@@ -72,7 +74,7 @@ module mkPraesidio_MemoryShim
   // internal bram
   BRAM_Configure cfg = defaultValue;
   cfg.memorySize = 8*1024; // 1 GiB DRAM and a two bits per 4 KiB page, this is 2*512*1024/8 Bytes = 64 KiB, assuming 64 bit dram words this is 64*1024*8/64 = 8*1024
-  BRAM2Port#(UInt#(13), Bit#(64)) bram <- mkBRAM2Server(cfg);
+  BRAM2Port#(UInt#(13), BramWordType) bram <- mkBRAM2Server(cfg);
   // internal fifos
   let internal_fifof_depth = cfg.outFIFODepth;
   FIFOF #(AXI4_AWFlit#(id_, addr_, awuser_)) awFF <- mkSizedFIFOF(internal_fifof_depth);
@@ -134,9 +136,9 @@ module mkPraesidio_MemoryShim
   endrule
 
   rule deq_write_req;
-    Bit#(64) rsp <- bram.portA.response.get;
-    let page_offset = get_page_offset(awFF.first.awaddr);
-    Bit#(64) mask = 1 << ((page_offset % (64/2)) * 2);
+    BramWordType rsp <- bram.portA.response.get;
+    let pageOffset = get_page_offset(awFF.first.awaddr);
+    BramWordType mask = 1 << ((pageOffset % (64/2)) * 2);
     awFF.deq;
     wFF.deq;
     if((rsp & mask) != 0) begin
@@ -175,9 +177,9 @@ module mkPraesidio_MemoryShim
   endrule
 
   rule deq_read_req;
-    Bit#(64) rsp <- bram.portA.response.get;
-    let page_offset = get_page_offset(arFF.first.araddr);
-    Bit#(64) mask = 3 << ((page_offset % (64/2)) * 2);
+    BramWordType rsp <- bram.portA.response.get;
+    let pageOffset = get_page_offset(arFF.first.araddr);
+    BramWordType mask = 3 << ((pageOffset % (64/2)) * 2);
     arFF.deq;
     if((rsp & mask) != 0) begin
       outAR.put(arFF.first);
