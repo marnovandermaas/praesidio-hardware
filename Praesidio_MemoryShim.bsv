@@ -131,17 +131,20 @@ module mkPraesidio_MemoryShim
       datain: 0
     });
     // DEBUG //
-    if (debug) $display("%0t: enq_write_req", $time,
-                        "\n", fshow(inAW.peek), "\n", fshow(inW.peek));
+    if (debug) begin
+      $display("%0t: enq_write_req", $time,
+               "\n", fshow(inAW.peek), "\n", fshow(inW.peek));
+    end
   endrule
 
   rule deq_write_req;
     BramWordType rsp <- bram.portA.response.get;
     let pageOffset = get_page_offset(awFF.first.awaddr);
     BramWordType mask = 1 << ((pageOffset % (64/2)) * 2);
+    Bool allowAccess = (rsp & mask) != 0;
     awFF.deq;
     wFF.deq;
-    if((rsp & mask) != 0) begin
+    if(allowAccess) begin
       outAW.put(awFF.first);
       outW.put(wFF.first);
     end else begin
@@ -149,15 +152,21 @@ module mkPraesidio_MemoryShim
       inB.put(AXI4_BFlit { bid: awFF.first.awid, bresp: OKAY, buser: 0});
     end
     // DEBUG //
-    if (debug) $display("%0t: deq_write_req", $time,
-                        "\n", fshow(awFF.first), "\n", fshow(wFF.first));
+    if (debug) begin
+      $display("%0t: deq_write_req", $time,
+               "\n", fshow(awFF.first),
+               "\n", fshow(wFF.first),
+               "\nAllow: ", fshow(allowAccess));
+    end
   endrule
 
   rule handle_write_rsp;
     outB.drop;
     inB.put(outB.peek);
     // DEBUG //
-    if (debug) $display("%0t: handle_write_rsp - ", $time, fshow(outB.peek));
+    if (debug) begin
+      $display("%0t: handle_write_rsp - ", $time, fshow(outB.peek));
+    end
   endrule
 
   // Reads
@@ -172,31 +181,40 @@ module mkPraesidio_MemoryShim
       datain: 0
     });
     // DEBUG //
-    if (debug) $display("%0t: enq_read_req", $time,
-                        "\n", fshow(inAR.peek));
+    if (debug) begin
+      $display("%0t: enq_read_req", $time,
+               "\n", fshow(inAR.peek));
+    end
   endrule
 
   rule deq_read_req;
     BramWordType rsp <- bram.portA.response.get;
     let pageOffset = get_page_offset(arFF.first.araddr);
+    //The shifted value is 3 so that allow access will be true if either the owned or the read bit are set.
     BramWordType mask = 3 << ((pageOffset % (64/2)) * 2);
+    Bool allowAccess = (rsp & mask) != 0;
     arFF.deq;
-    if((rsp & mask) != 0) begin
+    if(allowAccess) begin
       outAR.put(arFF.first);
     end else begin
       //TODO check whether you need to send multiple -1 back.
       inR.put(AXI4_RFlit{ rid: arFF.first.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
     end
     // DEBUG //
-    if (debug) $display("%0t: deq_read_req", $time,
-                        "\n", fshow(arFF.first));
+    if (debug) begin
+      $display("%0t: deq_read_req", $time,
+               "\n", fshow(arFF.first),
+               "\nAllow: ", fshow(allowAccess));
+    end
   endrule
 
   rule forward_read_rsp;
     outR.drop;
     inR.put(outR.peek);
     // DEBUG //
-    if (debug) $display("%0t: forward_read_rsp - ", $time, fshow(outR.peek));
+    if (debug) begin
+      $display("%0t: forward_read_rsp - ", $time, fshow(outR.peek));
+    end
   endrule
 
   // Interface
