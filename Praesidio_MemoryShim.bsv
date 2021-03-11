@@ -49,7 +49,8 @@ endinterface
 // ================================================================
 // Praesidio MemoryShim module
 
-typedef Bit#(64) BramWordType;
+typedef 64 BitsPerBramWord;
+typedef Bit#(BitsPerBramWord) BramWordType;
 
 module mkPraesidio_MemoryShim
     #(Bit#(addr_) start_address, Bit#(addr_)end_address)
@@ -109,7 +110,7 @@ module mkPraesidio_MemoryShim
 
   function UInt#(13) get_bram_addr(Bit#(addr_) address);
     let page_number = get_page_offset(address);
-    let bram_addr = page_number / (64/2);
+    let bram_addr = page_number / (fromInteger(valueOf(BitsPerBramWord))/2);
     return unpack(bram_addr[12:0]);
   endfunction
 
@@ -140,7 +141,7 @@ module mkPraesidio_MemoryShim
   rule deq_write_req;
     BramWordType rsp <- bram.portA.response.get;
     let pageOffset = get_page_offset(awFF.first.awaddr);
-    BramWordType mask = 1 << ((pageOffset % (64/2)) * 2);
+    BramWordType mask = 1 << ((pageOffset % (fromInteger(valueOf(BitsPerBramWord))/2)) * 2);
     Bool allowAccess = (rsp & mask) != 0;
     awFF.deq;
     wFF.deq;
@@ -191,7 +192,7 @@ module mkPraesidio_MemoryShim
     BramWordType rsp <- bram.portA.response.get;
     let pageOffset = get_page_offset(arFF.first.araddr);
     //The shifted value is 3 so that allow access will be true if either the owned or the read bit are set.
-    BramWordType mask = 3 << ((pageOffset % (64/2)) * 2);
+    BramWordType mask = 3 << ((pageOffset % (fromInteger(valueOf(BitsPerBramWord))/2)) * 2);
     Bool allowAccess = (rsp & mask) != 0;
     arFF.deq;
     if(allowAccess) begin
