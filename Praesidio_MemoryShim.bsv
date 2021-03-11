@@ -55,8 +55,10 @@ typedef Bit#(BitsPerBramWord) BramWordType;
 module mkPraesidio_MemoryShim
     #(Bit#(addr_) start_address, Bit#(addr_)end_address)
     (Praesidio_MemoryShim #(id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_))
-//TODO provisos: start_address < end_address, addr_ > 12
-  provisos();
+  provisos(
+    Add #(12, a__, addr_) //12 <= addr_
+    //TODO Add #(start_address, a__, end_address), //start_address <= end_address
+  );
 
   // Shims
   let  inShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
