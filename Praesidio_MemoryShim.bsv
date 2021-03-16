@@ -78,11 +78,14 @@ module mkPraesidio_MemoryShim
   BRAM_Configure cfg = defaultValue;
   cfg.memorySize = 8*1024; // 1 GiB DRAM and a two bits per 4 KiB page, this is 2*512*1024/8 Bytes = 64 KiB, assuming 64 bit dram words this is 64*1024*8/64 = 8*1024
   BRAM2Port#(UInt#(13), BramWordType) bram <- mkBRAM2Server(cfg);
-  // internal fifos
+  // internal fifos for outstanding BRAM requests
   let internal_fifof_depth = cfg.outFIFODepth;
   FIFOF #(AXI4_AWFlit#(id_, addr_, awuser_)) awFF <- mkSizedFIFOF(internal_fifof_depth);
-  FIFOF #( AXI4_WFlit#(data_,       wuser_))  wFF <- mkSizedFIFOF(internal_fifof_depth);
+  FIFOF #( AXI4_WFlit#(     data_,  wuser_))  wFF <- mkSizedFIFOF(internal_fifof_depth);
   FIFOF #(AXI4_ARFlit#(id_, addr_, aruser_)) arFF <- mkSizedFIFOF(internal_fifof_depth);
+  // internal fifos for responses to invalid requests
+  FIFOF #( AXI4_BFlit#(id_,         buser_))  bFF <- mkFIFOF;
+  FIFOF #( AXI4_RFlit#(id_, data_,  ruser_))  rFF <- mkFIFOF;
 
   // DEBUG //
   //////////////////////////////////////////////////////////////////////////////
@@ -152,7 +155,7 @@ module mkPraesidio_MemoryShim
       outW.put(wFF.first);
     end else begin
       //TODO check whether buser should actually be 0
-      inB.put(AXI4_BFlit { bid: awFF.first.awid, bresp: OKAY, buser: 0});
+      bFF.enq(AXI4_BFlit { bid: awFF.first.awid, bresp: OKAY, buser: 0});
     end
     // DEBUG //
     if (debug) begin
@@ -160,6 +163,15 @@ module mkPraesidio_MemoryShim
                "\n", fshow(awFF.first),
                "\n", fshow(wFF.first),
                "\nAllow: ", fshow(allowAccess));
+    end
+  endrule
+
+  rule insert_write_rsp;
+    inB.put(bFF.first);
+    bFF.deq;
+    // DEBUG //
+    if (debug) begin
+      $display("%0t: insert_write_rsp - ", $time, fshow(bFF.first));
     end
   endrule
 
@@ -201,7 +213,7 @@ module mkPraesidio_MemoryShim
       outAR.put(arFF.first);
     end else begin
       //TODO check whether you need to send multiple -1 back.
-      inR.put(AXI4_RFlit{ rid: arFF.first.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
+      rFF.enq(AXI4_RFlit{ rid: arFF.first.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
     end
     // DEBUG //
     if (debug) begin
@@ -211,12 +223,21 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule forward_read_rsp;
+  rule insert_read_rsp;
+    inR.put(rFF.first);
+    rFF.deq;
+    // DEBUG //
+    if (debug) begin
+      $display("%0t: insert_read_rsp - ", $time, fshow(rFF.first));
+    end
+  endrule
+
+  rule handle_read_rsp;
     outR.drop;
     inR.put(outR.peek);
     // DEBUG //
     if (debug) begin
-      $display("%0t: forward_read_rsp - ", $time, fshow(outR.peek));
+      $display("%0t: handle_read_rsp - ", $time, fshow(outR.peek));
     end
   endrule
 
