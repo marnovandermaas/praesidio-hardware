@@ -5,7 +5,7 @@ package Praesidio_CoreWW;
 import Fabric_Defs          :: *; // for Wd_Id, Wd_Addr, Wd_Data...
 import AXI4                 :: *;
 import Praesidio_MemoryShim :: *;
-import CoreWW_IFC           :: *;
+import CoreW_IFC           :: *;
 
 `ifdef PERFORMANCE_MONITORING
 import Monitored :: *;
