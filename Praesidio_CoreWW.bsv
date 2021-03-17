@@ -15,7 +15,7 @@ import Monitored :: *;
 // The Core module
 
 (* synthesize *)
-module mkCoreWW #(Reset dm_power_on_reset)
+module mkPraesidioCoreWW #(Reset dm_power_on_reset)
                (CoreW_IFC #(N_External_Interrupt_Sources));
   // ================================================================
   // Instantiate corew module
@@ -89,4 +89,6 @@ module mkCoreWW #(Reset dm_power_on_reset)
    interface Get tv_verifier_info_get = corew.tv_verifier_info_get;
 `endif
 
-endmodule: mkCoreWW
+endmodule: mkPraesidioCoreWW
+
+endpackage
