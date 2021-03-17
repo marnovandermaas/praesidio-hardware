@@ -3,9 +3,13 @@
 package Praesidio_CoreWW;
 
 import Fabric_Defs          :: *; // for Wd_Id, Wd_Addr, Wd_Data...
+import SoC_Map              :: *;
 import AXI4                 :: *;
+import Routable             :: *;
+import Connectable          :: *;
 import Praesidio_MemoryShim :: *;
-import CoreW_IFC           :: *;
+import CoreW_IFC            :: *;
+import CoreW                :: *;
 
 `ifdef PERFORMANCE_MONITORING
 import Monitored :: *;
@@ -25,16 +29,17 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
 
   // ================================================================
   // Instantiate Praesidio_MemoryShim module
+  SoC_Map_IFC  soc_map  <- mkSoC_Map;
+  //TODO what about reset?
    Praesidio_MemoryShim#(TAdd#(Wd_IId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
                     rangeBase(soc_map.m_mem0_controller_addr_range),
-                    rangeTop(soc_map.m_mem0_controller_addr_range),
-                    reset_by all_harts_reset);
+                    rangeTop(soc_map.m_mem0_controller_addr_range));
    mkConnection(corew_cached_initiator, praesidio_shim.target);
 `ifdef PERFORMANCE_MONITORING
    let monitored_initiator <- monitorAXI4_Initiator(praesidio_shim.initiator);
    let unwrapped_initiator = monitored_initiator.ifc;
    rule report_axi_events;
-      proc.events_axi(monitored_initiator.events);
+      corew.events_axi(monitored_initiator.events);
    endrule
 `else
    let unwrapped_initiator = praesidio_shim.initiator;
@@ -57,13 +62,9 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
 
   // ================================================================
   // Below this is just mapping methods and interfaces to corew except for cpu_mem_initiator
-  method Action  set_verbosity (Bit #(4)  verbosity, Bit #(64)  logdelay);
-    corew.set_verbosity (verbosity, logdelay);
-  endmethod
+  method set_verbosity = corew.set_verbosity;
 
-  method Action start (Bool is_running, Bit #(64) tohost_addr, Bit #(64) fromhost_addr);
-    corew.start(is_running, tohost_addr, fromhost_addr);
-  endmethod
+  method start = corew.start;
 
   interface cpu_imem_master = unwrapped_initiator;
 
@@ -71,9 +72,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
 
   interface core_external_interrupt_sources = corew.core_external_interrupt_sources;
   
-  method Action nmi_req (Bool set_not_clear);
-    corew.nmi_req(set_not_clear);
-  endmethod
+  method nmi_req = corew.nmi_req;
 
 `ifdef RVFI_DII
    interface Toooba_RVFI_DII_Server rvfi_dii_server = proc.rvfi_dii_server;
