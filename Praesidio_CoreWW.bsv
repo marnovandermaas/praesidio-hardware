@@ -1,6 +1,6 @@
 // Copyright (c) 2021 Marno van der Maas
 
-package CoreW;
+package Praesidio_CoreWW;
 
 import Fabric_Defs          :: *; // for Wd_Id, Wd_Addr, Wd_Data...
 import AXI4                 :: *;
