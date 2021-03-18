@@ -61,8 +61,8 @@ module mkPraesidio_MemoryShim
   );
 
   // Shims
-  let  inShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
-  let outShim <- mkAXI4InitiatorTargetShimFF;
+  let  inShim <- mkAXI4InitiatorTargetShimSizedFIFOF4;
+  let outShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
   // handy names
   let  inAW =  inShim.initiator.aw;
   let  inW  =  inShim.initiator.w;
@@ -78,11 +78,11 @@ module mkPraesidio_MemoryShim
   BRAM_Configure cfg = defaultValue;
   cfg.memorySize = 8*1024; // 1 GiB DRAM and a two bits per 4 KiB page, this is 2*512*1024/8 Bytes = 64 KiB, assuming 64 bit dram words this is 64*1024*8/64 = 8*1024
   BRAM2Port#(UInt#(13), BramWordType) bram <- mkBRAM2Server(cfg);
-  // internal fifos for outstanding BRAM requests
-  let internal_fifof_depth = cfg.outFIFODepth;
-  FIFOF #(AXI4_AWFlit#(id_, addr_, awuser_)) awFF <- mkSizedFIFOF(internal_fifof_depth);
-  FIFOF #( AXI4_WFlit#(     data_,  wuser_))  wFF <- mkSizedFIFOF(internal_fifof_depth);
-  FIFOF #(AXI4_ARFlit#(id_, addr_, aruser_)) arFF <- mkSizedFIFOF(internal_fifof_depth);
+//  // internal fifos for outstanding BRAM requests
+//  let internal_fifof_depth = cfg.outFIFODepth;
+//  FIFOF #(AXI4_AWFlit#(id_, addr_, awuser_)) awFF <- mkSizedFIFOF(internal_fifof_depth);
+//  FIFOF #( AXI4_WFlit#(     data_,  wuser_))  wFF <- mkSizedFIFOF(internal_fifof_depth);
+//  FIFOF #(AXI4_ARFlit#(id_, addr_, aruser_)) arFF <- mkSizedFIFOF(internal_fifof_depth);
   // internal fifos for responses to invalid requests
   FIFOF #( AXI4_BFlit#(id_,         buser_))  bFF <- mkFIFOF;
   FIFOF #( AXI4_RFlit#(id_, data_,  ruser_))  rFF <- mkFIFOF;
@@ -126,10 +126,8 @@ module mkPraesidio_MemoryShim
   // Writes
   //////////////////////////////////////////////////////////////////////////////
   rule enq_write_req;
-    awFF.enq(inAW.peek);
-    wFF.enq(inW.peek);
-    inAW.drop;
-    inW.drop;
+    //awFF.enq(inAW.peek);
+    //wFF.enq(inW.peek);
     bram.portA.request.put(BRAMRequest{
       write: False,
       responseOnWrite: False,
@@ -145,23 +143,25 @@ module mkPraesidio_MemoryShim
 
   rule deq_write_req;
     BramWordType rsp <- bram.portA.response.get;
-    let pageOffset = get_page_offset(awFF.first.awaddr);
+    let pageOffset = get_page_offset(inAW.peek.awaddr);
     BramWordType mask = 1 << ((pageOffset % (fromInteger(valueOf(BitsPerBramWord))/2)) * 2);
     Bool allowAccess = (rsp & mask) != 0;
-    awFF.deq;
-    wFF.deq;
+    //awFF.deq;
+    //wFF.deq;
+    inAW.drop;
+    inW.drop;
     if(allowAccess) begin
-      outAW.put(awFF.first);
-      outW.put(wFF.first);
+      outAW.put(inAW.peek);
+      outW.put(inW.peek);
     end else begin
       //TODO check whether buser should actually be 0
-      bFF.enq(AXI4_BFlit { bid: awFF.first.awid, bresp: OKAY, buser: 0});
+      bFF.enq(AXI4_BFlit { bid: inAW.peek.awid, bresp: OKAY, buser: 0});
     end
     // DEBUG //
     if (debug) begin
       $display("%0t: deq_write_req", $time,
-               "\n", fshow(awFF.first),
-               "\n", fshow(wFF.first),
+               "\n", fshow(inAW.peek),
+               "\n", fshow(inW.peek),
                "\nAllow: ", fshow(allowAccess));
     end
   endrule
@@ -187,8 +187,8 @@ module mkPraesidio_MemoryShim
   // Reads
   //////////////////////////////////////////////////////////////////////////////
   rule enq_read_req;
-    arFF.enq(inAR.peek);
-    inAR.drop;
+    //arFF.enq(inAR.peek);
+    //inAR.drop;
     bram.portA.request.put(BRAMRequest{
       write: False,
       responseOnWrite: False,
@@ -204,21 +204,22 @@ module mkPraesidio_MemoryShim
 
   rule deq_read_req;
     BramWordType rsp <- bram.portA.response.get;
-    let pageOffset = get_page_offset(arFF.first.araddr);
+    let pageOffset = get_page_offset(inAR.peek.araddr);
     //The shifted value is 3 so that allow access will be true if either the owned or the read bit are set.
     BramWordType mask = 3 << ((pageOffset % (fromInteger(valueOf(BitsPerBramWord))/2)) * 2);
     Bool allowAccess = (rsp & mask) != 0;
-    arFF.deq;
+    //arFF.deq;
+    inAR.drop;
     if(allowAccess) begin
-      outAR.put(arFF.first);
+      outAR.put(inAR.peek);
     end else begin
       //TODO check whether you need to send multiple -1 back.
-      rFF.enq(AXI4_RFlit{ rid: arFF.first.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
+      rFF.enq(AXI4_RFlit{ rid: inAR.peek.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
     end
     // DEBUG //
     if (debug) begin
       $display("%0t: deq_read_req", $time,
-               "\n", fshow(arFF.first),
+               "\n", fshow(inAR.peek),
                "\nAllow: ", fshow(allowAccess));
     end
   endrule
