@@ -1,7 +1,11 @@
 // Copyright (c) 2021 Marno van der Maas
 
+//This file has a wrapper for CoreW as it is found in Toooba: https://github.com/CTSRD-CHERI/Toooba
+
 package Praesidio_CoreWW;
 
+import Vector               :: *;
+import PLIC                 :: *;
 import Fabric_Defs          :: *; // for Wd_Id, Wd_Addr, Wd_Data...
 import SoC_Map              :: *;
 import AXI4                 :: *;
@@ -16,11 +20,74 @@ import Monitored :: *;
 `endif
 
 // ================================================================
-// The Core module
+// Main interface
+
+interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources);
+
+   // ----------------------------------------------------------------
+   // Debugging: set core's verbosity
+
+   method Action  set_verbosity (Bit #(4)  verbosity, Bit #(64)  logdelay);
+
+   // ----------------------------------------------------------------
+   // Start
+
+   method Action start (Bool is_running, Bit #(64) tohost_addr, Bit #(64) fromhost_addr);
+
+   // ----------------------------------------------------------------
+   // AXI4 Fabric interfaces
+
+   interface AXI4_Initiator #(TAdd#(Wd_IId,1), Wd_Addr, Wd_Data,
+                           0, 0, 0, 0, 0) cpu_imem_master;
+
+   interface AXI4_Initiator #(TAdd#(Wd_IId,1), Wd_Addr, Wd_Data,
+                           0, 0, 0, 0, 0) cpu_dmem_master;
+
+   // ----------------------------------------------------------------
+   // External interrupt sources
+
+   interface Vector #(t_n_interrupt_sources, PLIC_Source_IFC)  core_external_interrupt_sources;
+
+   // ----------------------------------------------------------------
+   // Non-maskable interrupt request
+
+   (* always_ready, always_enabled *)
+   method Action nmi_req (Bool set_not_clear);
+
+`ifdef RVFI_DII
+    interface Toooba_RVFI_DII_Server rvfi_dii_server;
+`endif
+
+`ifdef INCLUDE_GDB_CONTROL
+   // ----------------------------------------------------------------
+   // Optional Debug Module interfaces
+
+   // ----------------
+   // DMI (Debug Module Interface) facing remote debugger
+
+   interface DMI dmi;
+
+   // ----------------
+   // Facing Platform
+   // Non-Debug-Module Reset (reset all except DM)
+
+   interface Client #(Bool, Bool) ndm_reset_client;
+`endif
+
+`ifdef INCLUDE_TANDEM_VERIF
+   // ----------------------------------------------------------------
+   // Optional Tandem Verifier interface output tuples (n,vb),
+   // where 'vb' is a vector of bytes
+   // with relevant bytes in locations [0]..[n-1]
+
+   interface Get #(Info_CPU_to_Verifier)  tv_verifier_info_get;
+`endif
+
+endinterface
 
 (* synthesize *)
 module mkPraesidioCoreWW #(Reset dm_power_on_reset)
-               (CoreW_IFC #(N_External_Interrupt_Sources));
+               (Praesidio_CoreWW #(N_External_Interrupt_Sources));
   // ================================================================
   // Instantiate corew module
   CoreW_IFC #(N_External_Interrupt_Sources)  corew <- mkCoreW (dm_power_on_reset);
