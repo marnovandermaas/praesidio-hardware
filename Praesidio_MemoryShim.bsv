@@ -62,7 +62,7 @@ module mkPraesidio_MemoryShim
 
   // Shims
   let  inShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
-  let outShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
+  let outShim <- mkAXI4InitiatorTargetShimFF;
   // handy names
   let  inAW =  inShim.initiator.aw;
   let  inW  =  inShim.initiator.w;

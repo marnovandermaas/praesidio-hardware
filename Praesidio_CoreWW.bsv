@@ -35,13 +35,10 @@ interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources);
    method Action start (Bool is_running, Bit #(64) tohost_addr, Bit #(64) fromhost_addr);
 
    // ----------------------------------------------------------------
-   // AXI4 Fabric interfaces
+   // AXI4 Fabric interface
 
-   interface AXI4_Initiator #(TAdd#(Wd_IId,1), Wd_Addr, Wd_Data,
-                           0, 0, 0, 0, 0) cpu_imem_master;
-
-   interface AXI4_Initiator #(TAdd#(Wd_IId,1), Wd_Addr, Wd_Data,
-                           0, 0, 0, 0, 0) cpu_dmem_master;
+   interface AXI4_Initiator #(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data,
+                              0, 0, 0, 0, 0) cpu_mem_initiator;
 
    // ----------------------------------------------------------------
    // External interrupt sources
@@ -98,34 +95,33 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
   // Instantiate Praesidio_MemoryShim module
   SoC_Map_IFC  soc_map  <- mkSoC_Map;
   //TODO what about reset?
-   Praesidio_MemoryShim#(TAdd#(Wd_IId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
+  Praesidio_MemoryShim#(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
                     rangeBase(soc_map.m_mem0_controller_addr_range),
                     rangeTop(soc_map.m_mem0_controller_addr_range));
-   mkConnection(corew_cached_initiator, praesidio_shim.target);
 `ifdef PERFORMANCE_MONITORING
-   let monitored_initiator <- monitorAXI4_Initiator(praesidio_shim.initiator);
-   let unwrapped_initiator = monitored_initiator.ifc;
-   rule report_axi_events;
-      corew.events_axi(monitored_initiator.events);
-   endrule
+  let monitored_initiator <- monitorAXI4_Initiator(praesidio_shim.initiator);
+  let unwrapped_initiator = monitored_initiator.ifc;
+  rule report_axi_events;
+    corew.events_axi(monitored_initiator.events);
+  endrule
 `else
-   let unwrapped_initiator = praesidio_shim.initiator;
+  let unwrapped_initiator = praesidio_shim.initiator;
 `endif
   
-//  // ================================================================
-//  // AXI bus to funnel both cached and uncached accesses through Praesidio memory shim
-//
-//  // Initiators on the local 2x1 fabric
-//  Vector#(2, AXI4_Initiator #(TAdd#(Wd_IId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) initiator_vector = newVector;
-//  initiator_vector[0] = corew_cached_initiator;
-//  initiator_vector[1] = corew_uncached_initiator;
-//
-//  // Targets on the local 2x1 fabric
-//  Vector#(1, AXI4_Target #(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) target_vector = newVector;
-//  target_vector[0] = praesidio_shim.target;
-//
-//  Vector#(1, Bool) mergeRoute = replicate(True);
-//  mkAXI4Bus(constFn(mergeRoute), initiator_vector, target_vector);
+  // ================================================================
+  // AXI bus to funnel both cached and uncached accesses through Praesidio memory shim
+
+  // Initiators on the local 2x1 fabric
+  Vector#(2, AXI4_Initiator #(TAdd#(Wd_IId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) initiator_vector = newVector;
+  initiator_vector[0] = corew_cached_initiator;
+  initiator_vector[1] = corew_uncached_initiator;
+
+  // Targets on the local 2x1 fabric
+  Vector#(1, AXI4_Target #(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) target_vector = newVector;
+  target_vector[0] = praesidio_shim.target;
+
+  Vector#(1, Bool) mergeRoute = replicate(True);
+  mkAXI4Bus(constFn(mergeRoute), initiator_vector, target_vector);
 
   // ================================================================
   // Below this is just mapping methods and interfaces to corew except for cpu_mem_initiator
@@ -133,9 +129,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
 
   method start = corew.start;
 
-  interface cpu_imem_master = unwrapped_initiator;
-
-  interface cpu_dmem_master = corew_uncached_initiator;
+  interface cpu_mem_initiator = unwrapped_initiator;
 
   interface core_external_interrupt_sources = corew.core_external_interrupt_sources;
   
