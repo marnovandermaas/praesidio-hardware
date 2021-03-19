@@ -42,7 +42,7 @@ interface Praesidio_MemoryShim #(
     id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
   ) target;
   //interface AXI4_Target#(
-  //  id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
+  //  cid_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
   //) configure;
 endinterface
 
@@ -86,6 +86,8 @@ module mkPraesidio_MemoryShim
   // internal fifos for responses to invalid requests
   FIFOF #( AXI4_BFlit#(id_,         buser_))  bFF <- mkFIFOF;
   FIFOF #( AXI4_RFlit#(id_, data_,  ruser_))  rFF <- mkFIFOF;
+  // initialized register
+  Reg #(Bool) initialized <- mkReg(True);
 
   // DEBUG //
   //////////////////////////////////////////////////////////////////////////////
@@ -125,7 +127,7 @@ module mkPraesidio_MemoryShim
 
   // Writes
   //////////////////////////////////////////////////////////////////////////////
-  rule enq_write_req;
+  rule enq_write_req(initialized);
     //awFF.enq(inAW.peek);
     //wFF.enq(inW.peek);
     bram.portA.request.put(BRAMRequest{
@@ -141,7 +143,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_write_req;
+  rule deq_write_req(initialized);
     BramWordType rsp <- bram.portA.response.get;
     let pageOffset = get_page_offset(inAW.peek.awaddr);
     BramWordType mask = 1 << ((pageOffset % (fromInteger(valueOf(BitsPerBramWord))/2)) * 2);
@@ -166,7 +168,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule insert_write_rsp;
+  rule insert_write_rsp(initialized);
     inB.put(bFF.first);
     bFF.deq;
     // DEBUG //
@@ -175,7 +177,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule handle_write_rsp;
+  rule handle_write_rsp(initialized);
     outB.drop;
     inB.put(outB.peek);
     // DEBUG //
@@ -186,7 +188,7 @@ module mkPraesidio_MemoryShim
 
   // Reads
   //////////////////////////////////////////////////////////////////////////////
-  rule enq_read_req;
+  rule enq_read_req(initialized);
     //arFF.enq(inAR.peek);
     //inAR.drop;
     bram.portA.request.put(BRAMRequest{
@@ -202,7 +204,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_read_req;
+  rule deq_read_req(initialized);
     BramWordType rsp <- bram.portA.response.get;
     let pageOffset = get_page_offset(inAR.peek.araddr);
     //The shifted value is 3 so that allow access will be true if either the owned or the read bit are set.
@@ -224,7 +226,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule insert_read_rsp;
+  rule insert_read_rsp(initialized);
     inR.put(rFF.first);
     rFF.deq;
     // DEBUG //
@@ -233,7 +235,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule handle_read_rsp;
+  rule handle_read_rsp(initialized);
     outR.drop;
     inR.put(outR.peek);
     // DEBUG //
