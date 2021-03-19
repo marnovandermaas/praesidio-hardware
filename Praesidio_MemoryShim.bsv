@@ -51,12 +51,13 @@ endinterface
 
 typedef 64 BitsPerBramWord;
 typedef Bit#(BitsPerBramWord) BramWordType;
+typedef 12 PageBitOffset;
 
 module mkPraesidio_MemoryShim
     #(Bit#(addr_) start_address, Bit#(addr_)end_address)
     (Praesidio_MemoryShim #(id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_))
   provisos(
-    Add #(12, a__, addr_) //12 <= addr_
+    Add #(PageBitOffset, a__, addr_) //12 <= addr_
     //TODO Add #(start_address, a__, end_address), //start_address <= end_address
   );
 
@@ -111,7 +112,7 @@ module mkPraesidio_MemoryShim
   //////////////////////////////////////////////////////////////////////////////
   function Bit#(addr_) get_page_offset(Bit#(addr_) address);
     let offset = address - start_address;
-    let page_number = offset >> 12;
+    let page_number = offset >> fromInteger(valueOf(PageBitOffset));
     return page_number;
   endfunction
 
