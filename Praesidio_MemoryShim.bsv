@@ -88,7 +88,7 @@ module mkPraesidio_MemoryShim
   FIFOF #( AXI4_BFlit#(id_,         buser_))  bFF <- mkFIFOF;
   FIFOF #( AXI4_RFlit#(id_, data_,  ruser_))  rFF <- mkFIFOF;
   // initialized register
-  Reg #(Bool) initialized <- mkReg(True);
+  Reg #(Bool) initialized <- mkReg(False);
 
   // DEBUG //
   //////////////////////////////////////////////////////////////////////////////
@@ -125,6 +125,12 @@ module mkPraesidio_MemoryShim
   function Bool is_in_range(Bit#(addr_) address);
     return (address >= start_address) && (address < end_address);
   endfunction
+
+  // Configuration
+  //////////////////////////////////////////////////////////////////////////////
+  rule initialize(!initialized);
+    initialized <= True;
+  endrule
 
   // Writes
   //////////////////////////////////////////////////////////////////////////////
