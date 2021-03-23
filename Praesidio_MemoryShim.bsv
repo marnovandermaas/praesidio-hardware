@@ -167,12 +167,14 @@ module mkPraesidio_MemoryShim
   rule enq_write_req(initialized);
     awFF.enq(inAW.peek);
     wFF.enq(inW.peek);
-    bram.portA.request.put(BRAMRequest{
-      write: False,
-      responseOnWrite: False,
-      address: get_bram_addr(inAW.peek.awaddr),
-      datain: 0
-    });
+    if(is_in_range(inAW.peek.awaddr)) begin
+      bram.portA.request.put(BRAMRequest{
+        write: False,
+        responseOnWrite: False,
+        address: get_bram_addr(inAW.peek.awaddr),
+        datain: 0
+      });
+    end
     inAW.drop;
     inW.drop;
     // DEBUG //
@@ -183,15 +185,20 @@ module mkPraesidio_MemoryShim
   endrule
 
   rule deq_write_req(initialized);
-    BramWordType rsp <- bram.portA.response.get;
-    BramWordType mask = get_bram_mask(awFF.first.awaddr, False);
-    Bool allowAccess = (rsp & mask) != mask;
+    Bool allowAccess = False;
+    BramWordType rsp = ?;
+    BramWordType mask = ?;
+    if(is_in_range(awFF.first.awaddr)) begin
+      rsp <- bram.portA.response.get;
+      mask = get_bram_mask(awFF.first.awaddr, False);
+      allowAccess = (rsp & mask) != mask;
+    end
     awFF.deq;
     wFF.deq;
     //inAW.drop;
     //inW.drop;
     //TODO remove True
-    if(allowAccess || True) begin
+    if(allowAccess || !is_in_range(awFF.first.awaddr) || True) begin
       outAW.put(awFF.first);
       outW.put(wFF.first);
     end else begin
@@ -231,12 +238,14 @@ module mkPraesidio_MemoryShim
   rule enq_read_req(initialized);
     arFF.enq(inAR.peek);
     inAR.drop;
-    bram.portA.request.put(BRAMRequest{
-      write: False,
-      responseOnWrite: False,
-      address: get_bram_addr(inAR.peek.araddr),
-      datain: 0
-    });
+    if (is_in_range(inAR.peek.araddr)) begin
+      bram.portA.request.put(BRAMRequest{
+        write: False,
+        responseOnWrite: False,
+        address: get_bram_addr(inAR.peek.araddr),
+        datain: 0
+      });
+    end
     // DEBUG //
     if (debug) begin
       $display("%0t: enq_read_req", $time,
@@ -245,14 +254,18 @@ module mkPraesidio_MemoryShim
   endrule
 
   rule deq_read_req(initialized);
-    BramWordType rsp <- bram.portA.response.get;
-    let pageOffset = get_page_offset(arFF.first.araddr);
-    BramWordType mask = get_bram_mask(arFF.first.araddr, True);
-    Bool allowAccess = (rsp & mask) != mask;
+    BramWordType rsp = ?;
+    BramWordType mask = ?;
+    Bool allowAccess = False;
+    if(is_in_range(arFF.first.araddr)) begin
+      rsp <- bram.portA.response.get;
+      mask = get_bram_mask(arFF.first.araddr, True);
+      allowAccess = (rsp & mask) != mask;
+    end
     arFF.deq;
     //inAR.drop;
     //TODO remove True
-    if(allowAccess || True) begin
+    if(allowAccess || !is_in_range(arFF.first.araddr) || True) begin
       outAR.put(arFF.first);
     end else begin
       //TODO check whether you need to send multiple -1 back.
