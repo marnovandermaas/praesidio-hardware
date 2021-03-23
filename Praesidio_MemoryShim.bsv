@@ -140,20 +140,27 @@ module mkPraesidio_MemoryShim
 
   // Configuration
   //////////////////////////////////////////////////////////////////////////////
-//  rule initialize(!initialized);
-//    Bit#(addr_) address = 'h80730000;
-//    bram.portA.request.put(BRAMRequest{
-//      write: True,
-//      responseOnWrite: False,
-//      address: get_bram_addr(address),
-//      datain: get_bram_mask(address, True)
-//    });
-//    initialized <= True;
-//  endrule
+  rule initialize(!initialized);
+    Bit#(addr_) allow_address = 'h80000000;
+    bram.portA.request.put(BRAMRequest{
+      write: True,
+      responseOnWrite: False,
+      address: get_bram_addr(allow_address),
+      datain: get_bram_mask(allow_address, True)
+    });
+    Bit#(addr_) block_address = 'h80730000;
+    bram.portB.request.put(BRAMRequest{
+      write: True,
+      responseOnWrite: False,
+      address: get_bram_addr(block_address),
+      datain: get_bram_mask(block_address, True)
+    });
+    initialized <= True;
+  endrule
 
   // Writes
   //////////////////////////////////////////////////////////////////////////////
-  rule enq_write_req;
+  rule enq_write_req(initialized);
     awFF.enq(inAW.peek);
     wFF.enq(inW.peek);
     bram.portA.request.put(BRAMRequest{
@@ -171,7 +178,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_write_req;
+  rule deq_write_req(initialized);
     BramWordType rsp <- bram.portA.response.get;
     BramWordType mask = get_bram_mask(awFF.first.awaddr, False);
     Bool allowAccess = (rsp & mask) != mask;
@@ -179,7 +186,8 @@ module mkPraesidio_MemoryShim
     wFF.deq;
     //inAW.drop;
     //inW.drop;
-    if(allowAccess || !initialized) begin
+    //TODO remove True
+    if(allowAccess || True) begin
       outAW.put(awFF.first);
       outW.put(wFF.first);
     end else begin
@@ -196,7 +204,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_write_rsp;
+  rule deq_write_rsp(initialized);
     inB.put(bFF.first);
     bFF.deq;
     // DEBUG //
@@ -205,7 +213,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule enq_write_rsp;
+  rule enq_write_rsp(initialized);
     outB.drop;
     bFF.enq(outB.peek);
     // DEBUG //
@@ -216,7 +224,7 @@ module mkPraesidio_MemoryShim
 
   // Reads
   //////////////////////////////////////////////////////////////////////////////
-  rule enq_read_req;
+  rule enq_read_req(initialized);
     arFF.enq(inAR.peek);
     inAR.drop;
     bram.portA.request.put(BRAMRequest{
@@ -232,14 +240,15 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_read_req;
+  rule deq_read_req(initialized);
     BramWordType rsp <- bram.portA.response.get;
     let pageOffset = get_page_offset(arFF.first.araddr);
     BramWordType mask = get_bram_mask(arFF.first.araddr, True);
     Bool allowAccess = (rsp & mask) != mask;
     arFF.deq;
     //inAR.drop;
-    if(allowAccess || !initialized) begin
+    //TODO remove True
+    if(allowAccess || True) begin
       outAR.put(arFF.first);
     end else begin
       //TODO check whether you need to send multiple -1 back.
@@ -254,7 +263,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_read_rsp;
+  rule deq_read_rsp(initialized);
     inR.put(rFF.first);
     rFF.deq;
     // DEBUG //
@@ -263,7 +272,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule enq_read_rsp;
+  rule enq_read_rsp(initialized);
     outR.drop;
     rFF.enq(outR.peek);
     // DEBUG //
