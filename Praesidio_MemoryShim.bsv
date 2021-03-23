@@ -95,19 +95,19 @@ module mkPraesidio_MemoryShim
   //////////////////////////////////////////////////////////////////////////////
   Bool debug = False;
   (* fire_when_enabled *)
-  rule dbg (False);
-    Fmt dbg_str = $format("inAW.canPeek:\t ", fshow(inAW.canPeek))
-                + $format("\toutAW.canPut:\t ", fshow(outAW.canPut))
-                + $format("\n\tinW.canPeek:\t ", fshow(inW.canPeek))
-                + $format("\toutW.canPut:\t ", fshow(outW.canPut))
-                + $format("\n\tinB.canPut:\t ", fshow(inB.canPut))
-                + $format("\toutB.canPeek:\t ", fshow(outB.canPeek))
-                + $format("\n\tinAR.canPeek:\t ", fshow(inAR.canPeek))
-                + $format("\toutAR.canPut:\t ", fshow(outAR.canPut))
-                + $format("\n\tinR.canPut:\t ", fshow(inR.canPut))
-                + $format("\toutR.canPeek:\t ", fshow(outR.canPeek));
-    $display("%0t: ", $time, dbg_str);
-  endrule
+//  rule dbg (debug);
+//    Fmt dbg_str = $format("inAW.canPeek:\t ", fshow(inAW.canPeek))
+//                + $format("\toutAW.canPut:\t ", fshow(outAW.canPut))
+//                + $format("\n\tinW.canPeek:\t ", fshow(inW.canPeek))
+//                + $format("\toutW.canPut:\t ", fshow(outW.canPut))
+//                + $format("\n\tinB.canPut:\t ", fshow(inB.canPut))
+//                + $format("\toutB.canPeek:\t ", fshow(outB.canPeek))
+//                + $format("\n\tinAR.canPeek:\t ", fshow(inAR.canPeek))
+//                + $format("\toutAR.canPut:\t ", fshow(outAR.canPut))
+//                + $format("\n\tinR.canPut:\t ", fshow(inR.canPut))
+//                + $format("\toutR.canPeek:\t ", fshow(outR.canPeek));
+//    $display("%0t: ", $time, dbg_str);
+//  endrule
 
   // Common functions
   //////////////////////////////////////////////////////////////////////////////
