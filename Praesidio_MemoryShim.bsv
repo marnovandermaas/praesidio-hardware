@@ -146,7 +146,7 @@ module mkPraesidio_MemoryShim
       write: True,
       responseOnWrite: False,
       address: get_bram_addr(allow_address),
-      datain: get_bram_mask(allow_address, True)
+      datain: 0
     });
     Bit#(addr_) block_address = 'h80730000;
     bram.portB.request.put(BRAMRequest{
@@ -156,6 +156,10 @@ module mkPraesidio_MemoryShim
       datain: get_bram_mask(block_address, True)
     });
     initialized <= True;
+    // DEBUG //
+    if (debug) begin
+      $display("%0t: initialize", $time);
+    end
   endrule
 
   // Writes
