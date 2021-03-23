@@ -52,6 +52,7 @@ endinterface
 typedef 64 BitsPerBramWord;
 typedef Bit#(BitsPerBramWord) BramWordType;
 typedef 12 PageBitOffset;
+typedef 13 BramAddressBits;
 
 module mkPraesidio_MemoryShim
     #(Bit#(addr_) start_address, Bit#(addr_)end_address)
@@ -79,7 +80,7 @@ module mkPraesidio_MemoryShim
   BRAM_Configure cfg = defaultValue;
   cfg.memorySize = 8*1024; // 1 GiB DRAM and a two bits per 4 KiB page, this is 2*512*1024/8 Bytes = 64 KiB, assuming 64 bit dram words this is 64*1024*8/64 = 8*1024
   //cfg.loadFormat = tagged Hex "Zero.hex";
-  BRAM2Port#(UInt#(13), BramWordType) bram <- mkBRAM2Server(cfg);
+  BRAM2Port#(UInt#(BramAddressBits), BramWordType) bram <- mkBRAM2Server(cfg);
   // internal fifos for outstanding BRAM requests
   let internal_fifof_depth = cfg.outFIFODepth;
   FIFOF #(AXI4_AWFlit#(id_, addr_, awuser_)) awFF <- mkSizedFIFOF(internal_fifof_depth);
@@ -117,10 +118,10 @@ module mkPraesidio_MemoryShim
     return page_number;
   endfunction
 
-  function UInt#(13) get_bram_addr(Bit#(addr_) address);
+  function UInt#(BramAddressBits) get_bram_addr(Bit#(addr_) address);
     let page_number = get_page_offset(address);
     let bram_addr = page_number / (fromInteger(valueOf(BitsPerBramWord))/2);
-    return unpack(bram_addr[12:0]);
+    return unpack(bram_addr[(fromInteger(valueOf(BramAddressBits))-1):0]);
   endfunction
 
   function Bool is_in_range(Bit#(addr_) address);
