@@ -22,7 +22,7 @@ import Monitored :: *;
 // ================================================================
 // Main interface
 
-interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources);
+interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources, numeric type t_n_targets);
 
    // ----------------------------------------------------------------
    // Debugging: set core's verbosity
@@ -39,6 +39,9 @@ interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources);
 
    interface AXI4_Initiator #(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data,
                               0, 0, 0, 0, 0) cpu_mem_initiator;
+
+   interface AXI4_Target #(t_n_targets, Wd_Addr, Wd_Data,
+                           0, 0, 0, 0, 0) praesidio_config_target;
 
    // ----------------------------------------------------------------
    // External interrupt sources
@@ -84,7 +87,7 @@ endinterface
 
 (* synthesize *)
 module mkPraesidioCoreWW #(Reset dm_power_on_reset)
-               (Praesidio_CoreWW #(N_External_Interrupt_Sources));
+               (Praesidio_CoreWW #(N_External_Interrupt_Sources, N_Targets));
   // ================================================================
   // Instantiate corew module
   CoreW_IFC #(N_External_Interrupt_Sources)  corew <- mkCoreW (dm_power_on_reset);
@@ -95,9 +98,10 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
   // Instantiate Praesidio_MemoryShim module
   SoC_Map_IFC  soc_map  <- mkSoC_Map;
   //TODO what about reset?
-  Praesidio_MemoryShim#(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
+  Praesidio_MemoryShim#(TAdd#(Wd_IId,2), N_Targets, Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
                     rangeBase(soc_map.m_mem0_controller_addr_range),
-                    rangeTop(soc_map.m_mem0_controller_addr_range));
+                    rangeTop(soc_map.m_mem0_controller_addr_range)
+                    rangeBase(soc_map.m_praesidio_conf_addr_range);
 `ifdef PERFORMANCE_MONITORING
   let monitored_initiator <- monitorAXI4_Initiator(praesidio_shim.initiator);
   let unwrapped_initiator = monitored_initiator.ifc;
@@ -130,6 +134,8 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
   method start = corew.start;
 
   interface cpu_mem_initiator = unwrapped_initiator;
+
+  interface praesidio_config_target = praesidio_shim.configTarget;
 
   interface core_external_interrupt_sources = corew.core_external_interrupt_sources;
   

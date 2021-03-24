@@ -27,6 +27,7 @@ import SourceSink :: *;
 
 interface Praesidio_MemoryShim #(
     numeric type id_,
+    numeric type cid_,
     numeric type addr_,
     numeric type data_,
     numeric type awuser_,
@@ -36,14 +37,14 @@ interface Praesidio_MemoryShim #(
     numeric type ruser_);
   method Action clear;
   interface AXI4_Initiator #(
-    id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
+    id_,  addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
   ) initiator;
   interface AXI4_Target #(
-    id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
+    id_,  addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
   ) target;
-  //interface AXI4_Target#(
-  //  cid_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
-  //) configure;
+  interface AXI4_Target#(
+    cid_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
+  ) configTarget;
 endinterface
 
 // ================================================================
@@ -55,16 +56,18 @@ typedef 12 PageBitOffset;
 typedef 13 BramAddressBits;
 
 module mkPraesidio_MemoryShim
-    #(Bit#(addr_) start_address, Bit#(addr_)end_address)
-    (Praesidio_MemoryShim #(id_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_))
+    #(Bit#(addr_) start_address, Bit#(addr_) end_address, Bit#(addr_) conf_address)
+    (Praesidio_MemoryShim #(id_, cid_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_))
   provisos(
-    Add #(PageBitOffset, a__, addr_) //12 <= addr_
-    //TODO Add #(start_address, a__, end_address), //start_address <= end_address
+    Add #(PageBitOffset, a__, addr_), //12 <= addr_
+    Add #(addr_, b__, data_) // addr <= data_
+    //Add #(BitsPerBramWord, 0, data_) //data_ = BitsPerBramWord
   );
 
   // Shims
   let  inShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
   let outShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
+  let confShim<- mkAXI4InitiatorTargetShimFF;
   // handy names
   let  inAW =  inShim.initiator.aw;
   let  inW  =  inShim.initiator.w;
@@ -76,6 +79,11 @@ module mkPraesidio_MemoryShim
   let outB  = outShim.target.b;
   let outAR = outShim.target.ar;
   let outR  = outShim.target.r;
+  let confAW=confShim.initiator.aw;
+  let confW =confShim.initiator.w;
+  let confB =confShim.initiator.b;
+  let confAR=confShim.initiator.ar;
+  let confR =confShim.initiator.r;
   // internal bram
   BRAM_Configure cfg = defaultValue;
   cfg.memorySize = 8*1024; // 1 GiB DRAM and a two bits per 4 KiB page, this is 2*512*1024/8 Bytes = 64 KiB, assuming 64 bit dram words this is 64*1024*8/64 = 8*1024
@@ -89,6 +97,9 @@ module mkPraesidio_MemoryShim
   // internal fifos for responses to invalid requests
   FIFOF #( AXI4_BFlit#(id_,         buser_))  bFF <- mkFIFOF;
   FIFOF #( AXI4_RFlit#(id_, data_,  ruser_))  rFF <- mkFIFOF;
+  // internal fifos for config requests
+  FIFOF #(AXI4_AWFlit#(cid_, addr_, awuser_)) confAW_FF <- mkSizedFIFOF(internal_fifof_depth);
+  FIFOF #( AXI4_WFlit#(      data_,  wuser_))  confW_FF <- mkSizedFIFOF(internal_fifof_depth);
   // initialized register
   Reg #(Bool) initialized <- mkReg(False);
 
@@ -128,11 +139,10 @@ module mkPraesidio_MemoryShim
     return (address >= start_address) && (address < end_address);
   endfunction
 
-  function BramWordType get_bram_mask(Bit#(addr_) address, Bool read);
-    BramWordType return_value = 1;
-    if(read) begin
-      //The shifted value is 3 so that allow access will be true if either the owned or the read bit are set.
-      return_value = 3;
+  function BramWordType get_bram_mask(Bit#(addr_) address, Bool owner, Bool reader);
+    BramWordType return_value = owner ? 'b01 : 'b00;
+    if(reader) begin
+      return_value = return_value | 'b10;
     end
     let remainder = get_page_offset(address) % (fromInteger(valueOf(BitsPerBramWord))/2);
     return return_value << (remainder * 2);
@@ -140,34 +150,99 @@ module mkPraesidio_MemoryShim
 
   // Configuration
   //////////////////////////////////////////////////////////////////////////////
-  rule initialize(!initialized);
-    Bit#(addr_) allow_address = 'h80000000;
-    bram.portA.request.put(BRAMRequest{
-      write: True,
+//  rule initialize(!initialized);
+//    Bit#(addr_) allow_address = 'h80000000;
+//    bram.portA.request.put(BRAMRequest{
+//      write: True,
+//      responseOnWrite: False,
+//      address: get_bram_addr(allow_address),
+//      datain: 0
+//    });
+//    Bit#(addr_) block_address = 'h80730000;
+//    bram.portB.request.put(BRAMRequest{
+//      write: True,
+//      responseOnWrite: False,
+//      address: get_bram_addr(block_address),
+//      datain: get_bram_mask(block_address, True, True)
+//    });
+//    initialized <= True;
+//    // DEBUG //
+//    if (debug) begin
+//      $display("%0t: initialize", $time);
+//    end
+//  endrule
+
+  rule enq_config_write;
+    //TODO check that initiator ID matches before accepting request
+    confAW.drop;
+    confW.drop;
+    confAW_FF.enq(confAW.peek);
+    confW_FF.enq(confW.peek);
+    bram.portB.request.put(BRAMRequest{
+      write: False,
       responseOnWrite: False,
-      address: get_bram_addr(allow_address),
+      address: get_bram_addr(confAW.peek.awaddr),
       datain: 0
     });
-    Bit#(addr_) block_address = 'h80730000;
-    bram.portB.request.put(BRAMRequest{
-      write: True,
-      responseOnWrite: False,
-      address: get_bram_addr(block_address),
-      datain: get_bram_mask(block_address, True)
-    });
-    initialized <= True;
     // DEBUG //
     if (debug) begin
-      $display("%0t: initialize", $time);
+      $display("%0t: enq_config_write", $time,
+               "\n", $display(confAW.peek),
+               "\n", $display(confW.peek));
+    end
+  endrule
+
+  rule deq_config_write;
+    confAW_FF.deq;
+    confW_FF.deq;
+    let reqAddress = confAW_FF.first.awaddr;
+    let rsp <- bram.portB.response.get;
+    if(reqAddress == conf_address) begin
+      //Toggle ownership permission
+      bram.portB.request.put(BRAMRequest{
+        write: True,
+        responseOnWrite: False,
+        address: get_bram_addr(confAW.peek.awaddr),
+        datain: rsp ^ get_bram_mask(truncate(confW.peek.wdata), True, False)
+      });
+    end else if (reqAddress == conf_address + fromInteger(valueOf(BitsPerBramWord))) begin
+      //Toggle reader permission
+      bram.portB.request.put(BRAMRequest{
+        write: True,
+        responseOnWrite: False,
+        address: get_bram_addr(confAW.peek.awaddr),
+        datain: rsp ^ get_bram_mask(truncate(confW.peek.wdata), False, True)
+      });
+    end else begin
+      //Set initialized to True
+      initialized <= True;
+    end
+    //Check whether buser should actually be 0
+    confB.put(AXI4_BFlit { bid: confAW_FF.first.awid, bresp: OKAY, buser: 0});
+    // DEBUG //
+    if (debug) begin
+      $display("%0t: deq_config_write", $time,
+               "\n\t", $display(rsp));
+    end
+  endrule
+
+  rule config_read;
+    confAR.drop;
+    //Maybe return error here?
+    confR.put(AXI4_RFlit{ rid: confAR.peek.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
+    // DEBUG //
+    if (debug) begin
+      $display("%0t: config_read", $time,
+               "\n", $display(confAR.peek));
     end
   endrule
 
   // Writes
   //////////////////////////////////////////////////////////////////////////////
-  rule enq_write_req(initialized);
+  rule enq_write_req;
     awFF.enq(inAW.peek);
     wFF.enq(inW.peek);
-    if(is_in_range(inAW.peek.awaddr)) begin
+    if(is_in_range(inAW.peek.awaddr) && initialized) begin
       bram.portA.request.put(BRAMRequest{
         write: False,
         responseOnWrite: False,
@@ -184,25 +259,24 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_write_req(initialized);
+  rule deq_write_req;
     Bool allowAccess = False;
     BramWordType rsp = ?;
     BramWordType mask = ?;
-    if(is_in_range(awFF.first.awaddr)) begin
+    if(is_in_range(awFF.first.awaddr) && initialized) begin
       rsp <- bram.portA.response.get;
-      mask = get_bram_mask(awFF.first.awaddr, False);
+      mask = get_bram_mask(awFF.first.awaddr, True, False);
       allowAccess = (rsp & mask) != mask;
     end
     awFF.deq;
     wFF.deq;
     //inAW.drop;
     //inW.drop;
-    //TODO remove True
-    if(allowAccess || !is_in_range(awFF.first.awaddr) || True) begin
+    if(allowAccess || !is_in_range(awFF.first.awaddr) || !initialized) begin
       outAW.put(awFF.first);
       outW.put(wFF.first);
     end else begin
-      //TODO check whether buser should actually be 0
+      //Check whether buser should actually be 0
       bFF.enq(AXI4_BFlit { bid: awFF.first.awid, bresp: OKAY, buser: 0});
     end
     // DEBUG //
@@ -215,7 +289,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_write_rsp(initialized);
+  rule deq_write_rsp;
     inB.put(bFF.first);
     bFF.deq;
     // DEBUG //
@@ -224,7 +298,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule enq_write_rsp(initialized);
+  rule enq_write_rsp;
     outB.drop;
     bFF.enq(outB.peek);
     // DEBUG //
@@ -235,10 +309,10 @@ module mkPraesidio_MemoryShim
 
   // Reads
   //////////////////////////////////////////////////////////////////////////////
-  rule enq_read_req(initialized);
+  rule enq_read_req;
     arFF.enq(inAR.peek);
     inAR.drop;
-    if (is_in_range(inAR.peek.araddr)) begin
+    if (is_in_range(inAR.peek.araddr) && initialized) begin
       bram.portA.request.put(BRAMRequest{
         write: False,
         responseOnWrite: False,
@@ -253,19 +327,18 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_read_req(initialized);
+  rule deq_read_req;
     BramWordType rsp = ?;
     BramWordType mask = ?;
     Bool allowAccess = False;
-    if(is_in_range(arFF.first.araddr)) begin
+    if(is_in_range(arFF.first.araddr) && initialized) begin
       rsp <- bram.portA.response.get;
-      mask = get_bram_mask(arFF.first.araddr, True);
+      mask = get_bram_mask(arFF.first.araddr, True, True);
       allowAccess = (rsp & mask) != mask;
     end
     arFF.deq;
     //inAR.drop;
-    //TODO remove True
-    if(allowAccess || !is_in_range(arFF.first.araddr) || True) begin
+    if(allowAccess || !is_in_range(arFF.first.araddr) || !initialized) begin
       outAR.put(arFF.first);
     end else begin
       //TODO check whether you need to send multiple -1 back.
@@ -280,7 +353,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_read_rsp(initialized);
+  rule deq_read_rsp;
     inR.put(rFF.first);
     rFF.deq;
     // DEBUG //
@@ -289,7 +362,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule enq_read_rsp(initialized);
+  rule enq_read_rsp;
     outR.drop;
     rFF.enq(outR.peek);
     // DEBUG //
@@ -303,9 +376,11 @@ module mkPraesidio_MemoryShim
   method clear = action
     inShim.clear;
     outShim.clear;
+    initialized <= False;
   endaction;
   interface target    =  inShim.target;
   interface initiator = outShim.initiator;
+  interface configTarget = confShim.target;
 
 endmodule: mkPraesidio_MemoryShim
 
