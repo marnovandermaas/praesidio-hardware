@@ -98,7 +98,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
   // Instantiate Praesidio_MemoryShim module
   SoC_Map_IFC  soc_map  <- mkSoC_Map;
   //TODO what about reset?
-  Praesidio_MemoryShim#(TAdd#(Wd_IId,2), N_Targets, Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
+  Praesidio_MemoryShim#(TAdd#(Wd_IId,2), Wd_TId, Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
                     rangeBase(soc_map.m_mem0_controller_addr_range),
                     rangeTop(soc_map.m_mem0_controller_addr_range),
                     rangeBase(soc_map.m_praesidio_conf_addr_range));
