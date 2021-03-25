@@ -86,7 +86,7 @@ module mkPraesidio_MemoryShim
   let confR =confShim.initiator.r;
   // internal bram
   BRAM_Configure cfg = defaultValue;
-  cfg.memorySize = 8*1024; // 1 GiB DRAM and a two bits per 4 KiB page, this is 2*512*1024/8 Bytes = 64 KiB, assuming 64 bit dram words this is 64*1024*8/64 = 8*1024
+  cfg.memorySize = 8*1024; // 1 GiB DRAM and a two bits per 4 KiB page, this is 2*256*1024/8 Bytes = 64 KiB, assuming 64 bit dram words this is 64*1024*8/64 = 8*1024
   //cfg.loadFormat = tagged Hex "Zero.hex";
   BRAM2Port#(UInt#(BramAddressBits), BramWordType) bram <- mkBRAM2Server(cfg);
   // internal fifos for outstanding BRAM requests
