@@ -198,20 +198,36 @@ module mkPraesidio_MemoryShim
     let reqAddress = confAW_FF.first.awaddr;
     let rsp <- bram.portB.response.get;
     if(reqAddress == conf_address) begin
-      //Toggle ownership permission
+      //Revoke ownership permission
       bram.portB.request.put(BRAMRequest{
         write: True,
         responseOnWrite: False,
         address: get_bram_addr(confAW.peek.awaddr),
-        datain: rsp ^ get_bram_mask(truncate(confW.peek.wdata), True, False)
+        datain: rsp | get_bram_mask(truncate(confW.peek.wdata), True, False)
       });
     end else if (reqAddress == conf_address + fromInteger(valueOf(BitsPerBramWord))) begin
-      //Toggle reader permission
+      //Grant ownership permission
       bram.portB.request.put(BRAMRequest{
         write: True,
         responseOnWrite: False,
         address: get_bram_addr(confAW.peek.awaddr),
-        datain: rsp ^ get_bram_mask(truncate(confW.peek.wdata), False, True)
+        datain: rsp & ~get_bram_mask(truncate(confW.peek.wdata), True, False)
+      });
+    end else if (reqAddress == conf_address + 2*fromInteger(valueOf(BitsPerBramWord))) begin
+      //Revoke reader permission
+      bram.portB.request.put(BRAMRequest{
+        write: True,
+        responseOnWrite: False,
+        address: get_bram_addr(confAW.peek.awaddr),
+        datain: rsp | get_bram_mask(truncate(confW.peek.wdata), False, True)
+      });
+    end else if (reqAddress == conf_address + 3*fromInteger(valueOf(BitsPerBramWord))) begin
+      //Grant reader permission
+      bram.portB.request.put(BRAMRequest{
+        write: True,
+        responseOnWrite: False,
+        address: get_bram_addr(confAW.peek.awaddr),
+        datain: rsp & ~get_bram_mask(truncate(confW.peek.wdata), False, True)
       });
     end else begin
       //Set initialized to True
