@@ -187,8 +187,8 @@ module mkPraesidio_MemoryShim
     // DEBUG //
     if (debug) begin
       $display("%0t: enq_config_write", $time,
-               "\n", $display(confAW.peek),
-               "\n", $display(confW.peek));
+               "\n", fshow(confAW.peek),
+               "\n", fshow(confW.peek));
     end
   endrule
 
@@ -231,7 +231,7 @@ module mkPraesidio_MemoryShim
     // DEBUG //
     if (debug) begin
       $display("%0t: deq_config_write", $time,
-               "\n\t", $display(rsp));
+               "\n\t", fshow(rsp));
     end
   endrule
 
@@ -242,7 +242,7 @@ module mkPraesidio_MemoryShim
     // DEBUG //
     if (debug) begin
       $display("%0t: config_read", $time,
-               "\n", $display(confAR.peek));
+               "\n", fshow(confAR.peek));
     end
   endrule
 
