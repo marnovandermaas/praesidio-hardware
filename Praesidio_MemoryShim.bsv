@@ -197,13 +197,14 @@ module mkPraesidio_MemoryShim
     confW_FF.deq;
     let reqAddress = confAW_FF.first.awaddr;
     let rsp <- bram.portB.response.get;
+    let revoke = rsp & ~get_bram_mask(truncate(confW.peek.wdata), True, True);
     if(reqAddress == conf_address) begin
-      //Revoke ownership permission
+      //Revoke access to page
       bram.portB.request.put(BRAMRequest{
         write: True,
         responseOnWrite: False,
         address: get_bram_addr(confAW.peek.awaddr),
-        datain: rsp | get_bram_mask(truncate(confW.peek.wdata), True, False)
+        datain: revoke
       });
     end else if (reqAddress == conf_address + fromInteger(valueOf(BitsPerBramWord))) begin
       //Grant ownership permission
@@ -211,23 +212,15 @@ module mkPraesidio_MemoryShim
         write: True,
         responseOnWrite: False,
         address: get_bram_addr(confAW.peek.awaddr),
-        datain: rsp & ~get_bram_mask(truncate(confW.peek.wdata), True, False)
+        datain: revoke | get_bram_mask(truncate(confW.peek.wdata), True, False)
       });
     end else if (reqAddress == conf_address + 2*fromInteger(valueOf(BitsPerBramWord))) begin
-      //Revoke reader permission
-      bram.portB.request.put(BRAMRequest{
-        write: True,
-        responseOnWrite: False,
-        address: get_bram_addr(confAW.peek.awaddr),
-        datain: rsp | get_bram_mask(truncate(confW.peek.wdata), False, True)
-      });
-    end else if (reqAddress == conf_address + 3*fromInteger(valueOf(BitsPerBramWord))) begin
       //Grant reader permission
       bram.portB.request.put(BRAMRequest{
         write: True,
         responseOnWrite: False,
         address: get_bram_addr(confAW.peek.awaddr),
-        datain: rsp & ~get_bram_mask(truncate(confW.peek.wdata), False, True)
+        datain: revoke | get_bram_mask(truncate(confW.peek.wdata), False, True)
       });
     end else begin
       //Set initialized to True
@@ -282,7 +275,7 @@ module mkPraesidio_MemoryShim
     if(is_in_range(awFF.first.awaddr) && initialized) begin
       rsp <- bram.portA.response.get;
       mask = get_bram_mask(awFF.first.awaddr, True, False);
-      allowAccess = (rsp & mask) != mask;
+      allowAccess = (rsp & mask) != 0;
     end
     awFF.deq;
     wFF.deq;
@@ -350,7 +343,7 @@ module mkPraesidio_MemoryShim
     if(is_in_range(arFF.first.araddr) && initialized) begin
       rsp <- bram.portA.response.get;
       mask = get_bram_mask(arFF.first.araddr, True, True);
-      allowAccess = (rsp & mask) != mask;
+      allowAccess = (rsp & mask) != 0;
     end
     arFF.deq;
     //inAR.drop;
