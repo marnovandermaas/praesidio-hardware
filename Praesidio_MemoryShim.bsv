@@ -203,7 +203,7 @@ module mkPraesidio_MemoryShim
       bram.portB.request.put(BRAMRequest{
         write: True,
         responseOnWrite: False,
-        address: get_bram_addr(confAW.peek.awaddr),
+        address: get_bram_addr(reqAddress),
         datain: revoke
       });
     end else if (reqAddress == conf_address + fromInteger(valueOf(BitsPerBramWord))) begin
@@ -211,7 +211,7 @@ module mkPraesidio_MemoryShim
       bram.portB.request.put(BRAMRequest{
         write: True,
         responseOnWrite: False,
-        address: get_bram_addr(confAW.peek.awaddr),
+        address: get_bram_addr(reqAddress),
         datain: revoke | get_bram_mask(truncate(confW.peek.wdata), True, False)
       });
     end else if (reqAddress == conf_address + 2*fromInteger(valueOf(BitsPerBramWord))) begin
@@ -219,7 +219,7 @@ module mkPraesidio_MemoryShim
       bram.portB.request.put(BRAMRequest{
         write: True,
         responseOnWrite: False,
-        address: get_bram_addr(confAW.peek.awaddr),
+        address: get_bram_addr(reqAddress),
         datain: revoke | get_bram_mask(truncate(confW.peek.wdata), False, True)
       });
     end else begin
