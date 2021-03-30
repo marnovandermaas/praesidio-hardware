@@ -204,8 +204,9 @@ module mkPraesidio_MemoryShim
       $display("%0t: deq_config_write", $time,
                "\n\t", fshow(rsp),
                "\n\t", fshow(revoke),
+               "\n\t", fshow(conf_address),
                "\n\t", fshow(reqAddress),
-               "\n\t", fshow(conf_address));
+               "\n\t", fshow(argAddress));
     end
     if(reqAddress == conf_address) begin
       //Revoke access to page
@@ -216,7 +217,7 @@ module mkPraesidio_MemoryShim
         datain: revoke
       });
       if (debug) begin
-        $display("\n\t revoke access");
+        $display("\trevoke access");
       end
     end else if (reqAddress == conf_address + fromInteger(valueOf(BitsPerBramWord))) begin
       //Grant ownership permission
@@ -227,7 +228,7 @@ module mkPraesidio_MemoryShim
         datain: revoke | get_bram_mask(truncate(argAddress), True, False)
       });
       if (debug) begin
-        $display("\n\t grant ownership");
+        $display("\tgrant ownership");
       end
     end else if (reqAddress == conf_address + 2*fromInteger(valueOf(BitsPerBramWord))) begin
       //Grant reader permission
@@ -238,13 +239,13 @@ module mkPraesidio_MemoryShim
         datain: revoke | get_bram_mask(truncate(argAddress), False, True)
       });
       if (debug) begin
-        $display("\n\t grand reader");
+        $display("\tgrant reader");
       end
     end else begin
       //Set initialized to True
       initialized <= True;
       if (debug) begin
-        $display("\n\t initialized");
+        $display("\tinitialized");
       end
     end
     //Check whether buser should actually be 0
