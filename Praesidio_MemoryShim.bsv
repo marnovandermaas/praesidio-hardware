@@ -199,6 +199,14 @@ module mkPraesidio_MemoryShim
     let argAddress = confW_FF.first.wdata;
     let rsp <- bram.portB.response.get;
     let revoke = rsp & ~get_bram_mask(truncate(argAddress), True, True);
+    // DEBUG //
+    if (debug) begin
+      $display("%0t: deq_config_write", $time,
+               "\n\t", fshow(rsp),
+               "\n\t", fshow(revoke),
+               "\n\t", fshow(reqAddress),
+               "\n\t", fshow(conf_address));
+    end
     if(reqAddress == conf_address) begin
       //Revoke access to page
       bram.portB.request.put(BRAMRequest{
@@ -207,6 +215,9 @@ module mkPraesidio_MemoryShim
         address: get_bram_addr(reqAddress),
         datain: revoke
       });
+      if (debug) begin
+        $display("\n\t revoke access");
+      end
     end else if (reqAddress == conf_address + fromInteger(valueOf(BitsPerBramWord))) begin
       //Grant ownership permission
       bram.portB.request.put(BRAMRequest{
@@ -215,6 +226,9 @@ module mkPraesidio_MemoryShim
         address: get_bram_addr(reqAddress),
         datain: revoke | get_bram_mask(truncate(argAddress), True, False)
       });
+      if (debug) begin
+        $display("\n\t grant ownership");
+      end
     end else if (reqAddress == conf_address + 2*fromInteger(valueOf(BitsPerBramWord))) begin
       //Grant reader permission
       bram.portB.request.put(BRAMRequest{
@@ -223,17 +237,18 @@ module mkPraesidio_MemoryShim
         address: get_bram_addr(reqAddress),
         datain: revoke | get_bram_mask(truncate(argAddress), False, True)
       });
+      if (debug) begin
+        $display("\n\t grand reader");
+      end
     end else begin
       //Set initialized to True
       initialized <= True;
+      if (debug) begin
+        $display("\n\t initialized");
+      end
     end
     //Check whether buser should actually be 0
     confB.put(AXI4_BFlit { bid: confAW_FF.first.awid, bresp: OKAY, buser: 0});
-    // DEBUG //
-    if (debug) begin
-      $display("%0t: deq_config_write", $time,
-               "\n\t", fshow(rsp));
-    end
   endrule
 
   rule config_read;
