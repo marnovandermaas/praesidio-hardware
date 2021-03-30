@@ -213,7 +213,7 @@ module mkPraesidio_MemoryShim
       bram.portB.request.put(BRAMRequest{
         write: True,
         responseOnWrite: False,
-        address: get_bram_addr(reqAddress),
+        address: get_bram_addr(argAddress),
         datain: revoke
       });
       if (debug) begin
@@ -224,7 +224,7 @@ module mkPraesidio_MemoryShim
       bram.portB.request.put(BRAMRequest{
         write: True,
         responseOnWrite: False,
-        address: get_bram_addr(reqAddress),
+        address: get_bram_addr(argAddress),
         datain: revoke | get_bram_mask(argAddress, True, False)
       });
       if (debug) begin
@@ -235,7 +235,7 @@ module mkPraesidio_MemoryShim
       bram.portB.request.put(BRAMRequest{
         write: True,
         responseOnWrite: False,
-        address: get_bram_addr(reqAddress),
+        address: get_bram_addr(argAddress),
         datain: revoke | get_bram_mask(argAddress, False, True)
       });
       if (debug) begin
