@@ -196,9 +196,9 @@ module mkPraesidio_MemoryShim
     confAW_FF.deq;
     confW_FF.deq;
     let reqAddress = confAW_FF.first.awaddr;
-    let argAddress = confW_FF.first.wdata;
+    Bit#(addr_) argAddress = truncate(confW_FF.first.wdata);
     let rsp <- bram.portB.response.get;
-    let revoke = rsp & ~get_bram_mask(truncate(argAddress), True, True);
+    let revoke = rsp & ~get_bram_mask(argAddress, True, True);
     // DEBUG //
     if (debug) begin
       $display("%0t: deq_config_write", $time,
@@ -225,7 +225,7 @@ module mkPraesidio_MemoryShim
         write: True,
         responseOnWrite: False,
         address: get_bram_addr(reqAddress),
-        datain: revoke | get_bram_mask(truncate(argAddress), True, False)
+        datain: revoke | get_bram_mask(argAddress, True, False)
       });
       if (debug) begin
         $display("\tgrant ownership");
@@ -236,7 +236,7 @@ module mkPraesidio_MemoryShim
         write: True,
         responseOnWrite: False,
         address: get_bram_addr(reqAddress),
-        datain: revoke | get_bram_mask(truncate(argAddress), False, True)
+        datain: revoke | get_bram_mask(argAddress, False, True)
       });
       if (debug) begin
         $display("\tgrant reader");
