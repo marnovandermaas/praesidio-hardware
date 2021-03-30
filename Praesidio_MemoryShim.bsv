@@ -196,8 +196,9 @@ module mkPraesidio_MemoryShim
     confAW_FF.deq;
     confW_FF.deq;
     let reqAddress = confAW_FF.first.awaddr;
+    let argAddress = confW_FF.first.wdata;
     let rsp <- bram.portB.response.get;
-    let revoke = rsp & ~get_bram_mask(truncate(confW.peek.wdata), True, True);
+    let revoke = rsp & ~get_bram_mask(truncate(argAddress), True, True);
     if(reqAddress == conf_address) begin
       //Revoke access to page
       bram.portB.request.put(BRAMRequest{
@@ -212,7 +213,7 @@ module mkPraesidio_MemoryShim
         write: True,
         responseOnWrite: False,
         address: get_bram_addr(reqAddress),
-        datain: revoke | get_bram_mask(truncate(confW.peek.wdata), True, False)
+        datain: revoke | get_bram_mask(truncate(argAddress), True, False)
       });
     end else if (reqAddress == conf_address + 2*fromInteger(valueOf(BitsPerBramWord))) begin
       //Grant reader permission
@@ -220,7 +221,7 @@ module mkPraesidio_MemoryShim
         write: True,
         responseOnWrite: False,
         address: get_bram_addr(reqAddress),
-        datain: revoke | get_bram_mask(truncate(confW.peek.wdata), False, True)
+        datain: revoke | get_bram_mask(truncate(argAddress), False, True)
       });
     end else begin
       //Set initialized to True
