@@ -259,6 +259,74 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
+  // Reads
+  //////////////////////////////////////////////////////////////////////////////
+  rule enq_read_req;
+    arFF.enq(inAR.peek);
+    inAR.drop;
+    if (is_in_range(inAR.peek.araddr) && initialized) begin
+      bram.portA.request.put(BRAMRequest{
+        write: False,
+        responseOnWrite: False,
+        address: get_bram_addr(inAR.peek.araddr),
+        datain: 0
+      });
+    end
+    if (debug) begin
+      $display("%0t: enq_read_req", $time,
+               "\n", fshow(inAR.peek));
+    end
+  endrule
+
+  rule deq_read_req;
+    BramWordType rsp = ?;
+    BramWordType mask = ?;
+    Bool allowAccess = False;
+    if(is_in_range(arFF.first.araddr) && initialized) begin
+      rsp <- bram.portA.response.get;
+      mask = get_bram_mask(arFF.first.araddr, True, True);
+      allowAccess = (rsp & mask) != 0;
+    end
+    arFF.deq;
+    if (debug) begin
+      $display("%0t: deq_read_req", $time,
+               "\n\t", fshow(arFF.first),
+               "\n\t", fshow(rsp),
+               "\n\tAllow: ", fshow(allowAccess));
+    end
+    if(allowAccess || !is_in_range(arFF.first.araddr) || !initialized) begin
+      outAR.put(arFF.first);
+      if (debug) begin
+        $display("\tForwarded request");
+      end
+    end else begin
+      //TODO check whether you need to send multiple -1 back.
+      rFF.enq(AXI4_RFlit{ rid: arFF.first.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
+      if (debug) begin
+        $display("\tBlocked request");
+      end
+    end
+  endrule
+
+  rule handle_read_rsp;
+    if (debug) begin
+      $display("%0t: handle_read_rsp - ", $time);
+    end
+    if (outR.canPeek) begin
+      outR.drop;
+      inR.put(outR.peek);
+      if (debug) begin
+        $display(fshow(outR.peek));
+      end
+    end else begin
+      inR.put(rFF.first);
+      rFF.deq;
+      if (debug) begin
+        $display(fshow(rFF.first));
+      end
+    end
+  endrule
+
   // Writes
   //////////////////////////////////////////////////////////////////////////////
   rule enq_write_req;
@@ -328,74 +396,6 @@ module mkPraesidio_MemoryShim
       bFF.deq;
       if (debug) begin
         $display(fshow(bFF.first));
-      end
-    end
-  endrule
-
-  // Reads
-  //////////////////////////////////////////////////////////////////////////////
-  rule enq_read_req;
-    arFF.enq(inAR.peek);
-    inAR.drop;
-    if (is_in_range(inAR.peek.araddr) && initialized) begin
-      bram.portA.request.put(BRAMRequest{
-        write: False,
-        responseOnWrite: False,
-        address: get_bram_addr(inAR.peek.araddr),
-        datain: 0
-      });
-    end
-    if (debug) begin
-      $display("%0t: enq_read_req", $time,
-               "\n", fshow(inAR.peek));
-    end
-  endrule
-
-  rule deq_read_req;
-    BramWordType rsp = ?;
-    BramWordType mask = ?;
-    Bool allowAccess = False;
-    if(is_in_range(arFF.first.araddr) && initialized) begin
-      rsp <- bram.portA.response.get;
-      mask = get_bram_mask(arFF.first.araddr, True, True);
-      allowAccess = (rsp & mask) != 0;
-    end
-    arFF.deq;
-    if (debug) begin
-      $display("%0t: deq_read_req", $time,
-               "\n\t", fshow(arFF.first),
-               "\n\t", fshow(rsp),
-               "\n\tAllow: ", fshow(allowAccess));
-    end
-    if(allowAccess || !is_in_range(arFF.first.araddr) || !initialized) begin
-      outAR.put(arFF.first);
-      if (debug) begin
-        $display("\tForwarded request");
-      end
-    end else begin
-      //TODO check whether you need to send multiple -1 back.
-      rFF.enq(AXI4_RFlit{ rid: arFF.first.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
-      if (debug) begin
-        $display("\tBlocked request");
-      end
-    end
-  endrule
-
-  rule handle_read_rsp;
-    if (debug) begin
-      $display("%0t: handle_read_rsp - ", $time);
-    end
-    if (outR.canPeek) begin
-      outR.drop;
-      inR.put(outR.peek);
-      if (debug) begin
-        $display(fshow(outR.peek));
-      end
-    end else begin
-      inR.put(rFF.first);
-      rFF.deq;
-      if (debug) begin
-        $display(fshow(rFF.first));
       end
     end
   endrule
