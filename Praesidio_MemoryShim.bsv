@@ -313,21 +313,22 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_write_rsp;
-    inB.put(bFF.first);
-    bFF.deq;
-    // DEBUG //
+  rule handle_write_rsp;
     if (debug) begin
-      $display("%0t: deq_write_rsp - ", $time, fshow(bFF.first));
+      $display("%0t: handle_write_rsp - ", $time);
     end
-  endrule
-
-  rule enq_write_rsp;
-    outB.drop;
-    bFF.enq(outB.peek);
-    // DEBUG //
-    if (debug) begin
-      $display("%0t: enq_write_rsp - ", $time, fshow(outB.peek));
+    if(outB.canPeek) begin
+      outB.drop;
+      inB.put(outB.peek);
+      if (debug) begin
+        $display(fshow(outB.peek));
+      end
+    end else begin
+      inB.put(bFF.first);
+      bFF.deq;
+      if (debug) begin
+        $display(fshow(bFF.first));
+      end
     end
   endrule
 
@@ -380,21 +381,22 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_read_rsp;
-    inR.put(rFF.first);
-    rFF.deq;
-    // DEBUG //
+  rule handle_read_rsp;
     if (debug) begin
-      $display("%0t: deq_read_rsp - ", $time, fshow(rFF.first));
+      $display("%0t: handle_read_rsp - ", $time);
     end
-  endrule
-
-  rule enq_read_rsp;
-    outR.drop;
-    rFF.enq(outR.peek);
-    // DEBUG //
-    if (debug) begin
-      $display("%0t: enq_read_rsp - ", $time, fshow(outR.peek));
+    if (outR.canPeek) begin
+      outR.drop;
+      inR.put(outR.peek);
+      if (debug) begin
+        $display(fshow(outR.peek));
+      end
+    end else begin
+      inR.put(rFF.first);
+      rFF.deq;
+      if (debug) begin
+        $display(fshow(rFF.first));
+      end
     end
   endrule
 
