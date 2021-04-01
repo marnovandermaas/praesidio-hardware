@@ -166,7 +166,6 @@ module mkPraesidio_MemoryShim
 //      datain: get_bram_mask(block_address, True, True)
 //    });
 //    initialized <= True;
-//    // DEBUG //
 //    if (debug) begin
 //      $display("%0t: initialize", $time);
 //    end
@@ -184,7 +183,6 @@ module mkPraesidio_MemoryShim
       address: get_bram_addr(truncate(confW.peek.wdata)),
       datain: 0
     });
-    // DEBUG //
     if (debug) begin
       $display("%0t: enq_config_write", $time,
                "\n", fshow(confAW.peek),
@@ -199,7 +197,6 @@ module mkPraesidio_MemoryShim
     Bit#(addr_) argAddress = truncate(confW_FF.first.wdata);
     let rsp <- bram.portB.response.get;
     let revoke = rsp & ~get_bram_mask(argAddress, True, True);
-    // DEBUG //
     if (debug) begin
       $display("%0t: deq_config_write", $time,
                "\n\t", fshow(rsp),
@@ -256,7 +253,6 @@ module mkPraesidio_MemoryShim
     confAR.drop;
     //Maybe return error here?
     confR.put(AXI4_RFlit{ rid: confAR.peek.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
-    // DEBUG //
     if (debug) begin
       $display("%0t: config_read", $time,
                "\n", fshow(confAR.peek));
@@ -278,7 +274,6 @@ module mkPraesidio_MemoryShim
     end
     inAW.drop;
     inW.drop;
-    // DEBUG //
     if (debug) begin
       $display("%0t: enq_write_req", $time,
                "\n", fshow(inAW.peek), "\n", fshow(inW.peek));
@@ -296,7 +291,6 @@ module mkPraesidio_MemoryShim
     end
     awFF.deq;
     wFF.deq;
-    // DEBUG //
     if (debug) begin
       $display("%0t: deq_write_req", $time,
                "\n\t", fshow(awFF.first),
@@ -350,7 +344,6 @@ module mkPraesidio_MemoryShim
         datain: 0
       });
     end
-    // DEBUG //
     if (debug) begin
       $display("%0t: enq_read_req", $time,
                "\n", fshow(inAR.peek));
@@ -367,7 +360,6 @@ module mkPraesidio_MemoryShim
       allowAccess = (rsp & mask) != 0;
     end
     arFF.deq;
-    // DEBUG //
     if (debug) begin
       $display("%0t: deq_read_req", $time,
                "\n\t", fshow(arFF.first),
