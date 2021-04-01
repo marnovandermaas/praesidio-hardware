@@ -296,22 +296,26 @@ module mkPraesidio_MemoryShim
     end
     awFF.deq;
     wFF.deq;
-    //inAW.drop;
-    //inW.drop;
-    if(allowAccess || !is_in_range(awFF.first.awaddr) || !initialized) begin
-      outAW.put(awFF.first);
-      outW.put(wFF.first);
-    end else begin
-      //Check whether buser should actually be 0
-      bFF.enq(AXI4_BFlit { bid: awFF.first.awid, bresp: OKAY, buser: 0});
-    end
     // DEBUG //
     if (debug) begin
       $display("%0t: deq_write_req", $time,
-               "\n", fshow(awFF.first),
-               "\n", fshow(wFF.first),
-               "\n", fshow(rsp),
-               "\nAllow: ", fshow(allowAccess));
+               "\n\t", fshow(awFF.first),
+               "\n\t", fshow(wFF.first),
+               "\n\t", fshow(rsp),
+               "\n\tAllow: ", fshow(allowAccess));
+    end
+    if(allowAccess || !is_in_range(awFF.first.awaddr) || !initialized) begin
+      outAW.put(awFF.first);
+      outW.put(wFF.first);
+      if (debug) begin
+        $display("\tForwarded request");
+      end
+    end else begin
+      //Check whether buser should actually be 0
+      bFF.enq(AXI4_BFlit { bid: awFF.first.awid, bresp: OKAY, buser: 0});
+      if (debug) begin
+        $display("\tBlocked request");
+      end
     end
   endrule
 
@@ -363,19 +367,24 @@ module mkPraesidio_MemoryShim
       allowAccess = (rsp & mask) != 0;
     end
     arFF.deq;
-    //inAR.drop;
-    if(allowAccess || !is_in_range(arFF.first.araddr) || !initialized) begin
-      outAR.put(arFF.first);
-    end else begin
-      //TODO check whether you need to send multiple -1 back.
-      rFF.enq(AXI4_RFlit{ rid: arFF.first.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
-    end
     // DEBUG //
     if (debug) begin
       $display("%0t: deq_read_req", $time,
-               "\n", fshow(arFF.first),
-               "\n", fshow(rsp),
-               "\nAllow: ", fshow(allowAccess));
+               "\n\t", fshow(arFF.first),
+               "\n\t", fshow(rsp),
+               "\n\tAllow: ", fshow(allowAccess));
+    end
+    if(allowAccess || !is_in_range(arFF.first.araddr) || !initialized) begin
+      outAR.put(arFF.first);
+      if (debug) begin
+        $display("\tForwarded request");
+      end
+    end else begin
+      //TODO check whether you need to send multiple -1 back.
+      rFF.enq(AXI4_RFlit{ rid: arFF.first.arid, rdata: -1, rresp: OKAY, rlast: True, ruser: 0});
+      if (debug) begin
+        $display("\tBlocked request");
+      end
     end
   endrule
 
