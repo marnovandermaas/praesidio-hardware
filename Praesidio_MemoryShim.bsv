@@ -181,7 +181,7 @@ module mkPraesidio_MemoryShim
     bram.portB.request.put(BRAMRequest{
       write: False,
       responseOnWrite: False,
-      address: get_bram_addr(confAW.peek.awaddr),
+      address: get_bram_addr(truncate(confW.peek.wdata)),
       datain: 0
     });
     // DEBUG //
