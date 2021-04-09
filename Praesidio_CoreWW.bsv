@@ -22,7 +22,7 @@ import Monitored :: *;
 // ================================================================
 // Main interface
 
-interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources, numeric type t_n_targets);
+interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources, numeric type t_n_subordinates);
 
    // ----------------------------------------------------------------
    // Debugging: set core's verbosity
@@ -37,11 +37,11 @@ interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources, numeric type t_
    // ----------------------------------------------------------------
    // AXI4 Fabric interface
 
-   interface AXI4_Initiator #(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data,
-                              0, 0, 0, 0, 0) cpu_mem_initiator;
+   interface AXI4_Manager #(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data,
+                              0, 0, 0, 0, 0) cpu_mem_manager;
 
-   interface AXI4_Target #(t_n_targets, Wd_Addr, Wd_Data,
-                           0, 0, 0, 0, 0) praesidio_config_target;
+   interface AXI4_Subordinate #(t_n_subordinates, Wd_Addr, Wd_Data,
+                           0, 0, 0, 0, 0) praesidio_config_subordinate;
 
    // ----------------------------------------------------------------
    // External interrupt sources
@@ -91,8 +91,8 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
   // ================================================================
   // Instantiate corew module
   CoreW_IFC #(N_External_Interrupt_Sources)  corew <- mkCoreW (dm_power_on_reset);
-  let corew_cached_initiator = corew.cpu_imem_master;
-  let corew_uncached_initiator = corew.cpu_dmem_master;
+  let corew_cached_manager = corew.cpu_imem_master;
+  let corew_uncached_manager = corew.cpu_dmem_master;
 
   // ================================================================
   // Instantiate Praesidio_MemoryShim module
@@ -103,39 +103,39 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
                     rangeTop(soc_map.m_mem0_controller_addr_range),
                     rangeBase(soc_map.m_praesidio_conf_addr_range));
 `ifdef PERFORMANCE_MONITORING
-  let monitored_initiator <- monitorAXI4_Initiator(praesidio_shim.initiator);
-  let unwrapped_initiator = monitored_initiator.ifc;
+  let monitored_manager <- monitorAXI4_Manager(praesidio_shim.manager);
+  let unwrapped_manager = monitored_manager.ifc;
   rule report_axi_events;
-    corew.events_axi(monitored_initiator.events);
+    corew.events_axi(monitored_manager.events);
   endrule
 `else
-  let unwrapped_initiator = praesidio_shim.initiator;
+  let unwrapped_manager = praesidio_shim.manager;
 `endif
   
   // ================================================================
   // AXI bus to funnel both cached and uncached accesses through Praesidio memory shim
 
-  // Initiators on the local 2x1 fabric
-  Vector#(2, AXI4_Initiator #(TAdd#(Wd_IId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) initiator_vector = newVector;
-  initiator_vector[0] = corew_cached_initiator;
-  initiator_vector[1] = corew_uncached_initiator;
+  // Managers on the local 2x1 fabric
+  Vector#(2, AXI4_Manager #(TAdd#(Wd_IId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) manager_vector = newVector;
+  manager_vector[0] = corew_cached_manager;
+  manager_vector[1] = corew_uncached_manager;
 
-  // Targets on the local 2x1 fabric
-  Vector#(1, AXI4_Target #(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) target_vector = newVector;
-  target_vector[0] = praesidio_shim.target;
+  // Subordinates on the local 2x1 fabric
+  Vector#(1, AXI4_Subordinate #(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) subordinate_vector = newVector;
+  subordinate_vector[0] = praesidio_shim.subordinate;
 
   Vector#(1, Bool) mergeRoute = replicate(True);
-  mkAXI4Bus(constFn(mergeRoute), initiator_vector, target_vector);
+  mkAXI4Bus(constFn(mergeRoute), manager_vector, subordinate_vector);
 
   // ================================================================
-  // Below this is just mapping methods and interfaces to corew except for cpu_mem_initiator
+  // Below this is just mapping methods and interfaces to corew except for cpu_mem_manager
   method set_verbosity = corew.set_verbosity;
 
   method start = corew.start;
 
-  interface cpu_mem_initiator = unwrapped_initiator;
+  interface cpu_mem_manager = unwrapped_manager;
 
-  interface praesidio_config_target = praesidio_shim.configTarget;
+  interface praesidio_config_subordinate = praesidio_shim.configSubordinate;
 
   interface core_external_interrupt_sources = corew.core_external_interrupt_sources;
   

@@ -36,15 +36,15 @@ interface Praesidio_MemoryShim #(
     numeric type aruser_,
     numeric type ruser_);
   method Action clear;
-  interface AXI4_Initiator #(
+  interface AXI4_Manager #(
     id_,  addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
-  ) initiator;
-  interface AXI4_Target #(
+  ) manager;
+  interface AXI4_Subordinate #(
     id_,  addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
-  ) target;
-  interface AXI4_Target#(
+  ) subordinate;
+  interface AXI4_Subordinate#(
     cid_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_
-  ) configTarget;
+  ) configSubordinate;
 endinterface
 
 // ================================================================
@@ -65,25 +65,25 @@ module mkPraesidio_MemoryShim
   );
 
   // Shims
-  let  inShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
-  let outShim <- mkAXI4InitiatorTargetShimBypassFIFOF;
-  let confShim<- mkAXI4InitiatorTargetShimFF;
+  let  inShim <- mkAXI4ManagerSubordinateShimBypassFIFOF;
+  let outShim <- mkAXI4ManagerSubordinateShimBypassFIFOF;
+  let confShim<- mkAXI4ManagerSubordinateShimFF;
   // handy names
-  let  inAW =  inShim.initiator.aw;
-  let  inW  =  inShim.initiator.w;
-  let  inB  =  inShim.initiator.b;
-  let  inAR =  inShim.initiator.ar;
-  let  inR  =  inShim.initiator.r;
-  let outAW = outShim.target.aw;
-  let outW  = outShim.target.w;
-  let outB  = outShim.target.b;
-  let outAR = outShim.target.ar;
-  let outR  = outShim.target.r;
-  let confAW=confShim.initiator.aw;
-  let confW =confShim.initiator.w;
-  let confB =confShim.initiator.b;
-  let confAR=confShim.initiator.ar;
-  let confR =confShim.initiator.r;
+  let  inAW =  inShim.manager.aw;
+  let  inW  =  inShim.manager.w;
+  let  inB  =  inShim.manager.b;
+  let  inAR =  inShim.manager.ar;
+  let  inR  =  inShim.manager.r;
+  let outAW = outShim.subordinate.aw;
+  let outW  = outShim.subordinate.w;
+  let outB  = outShim.subordinate.b;
+  let outAR = outShim.subordinate.ar;
+  let outR  = outShim.subordinate.r;
+  let confAW=confShim.manager.aw;
+  let confW =confShim.manager.w;
+  let confB =confShim.manager.b;
+  let confAR=confShim.manager.ar;
+  let confR =confShim.manager.r;
   // internal bram
   BRAM_Configure cfg = defaultValue;
   cfg.memorySize = 8*1024; // 1 GiB DRAM and a two bits per 4 KiB page, this is 2*256*1024/8 Bytes = 64 KiB, assuming 64 bit dram words this is 64*1024*8/64 = 8*1024
@@ -172,7 +172,7 @@ module mkPraesidio_MemoryShim
 //  endrule
 
   rule enq_config_write;
-    //TODO check that initiator ID matches before accepting request
+    //TODO check that manager ID matches before accepting request
     confAW.drop;
     confW.drop;
     confAW_FF.enq(confAW.peek);
@@ -407,9 +407,9 @@ module mkPraesidio_MemoryShim
     outShim.clear;
     initialized <= False;
   endaction;
-  interface target    =  inShim.target;
-  interface initiator = outShim.initiator;
-  interface configTarget = confShim.target;
+  interface subordinate       =   inShim.subordinate;
+  interface manager           =  outShim.manager;
+  interface configSubordinate = confShim.subordinate;
 
 endmodule: mkPraesidio_MemoryShim
 
