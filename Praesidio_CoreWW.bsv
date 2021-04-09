@@ -37,7 +37,7 @@ interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources, numeric type t_
    // ----------------------------------------------------------------
    // AXI4 Fabric interface
 
-   interface AXI4_Manager #(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data,
+   interface AXI4_Manager #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
                               0, 0, 0, 0, 0) cpu_mem_manager;
 
    interface AXI4_Subordinate #(t_n_subordinates, Wd_Addr, Wd_Data,
@@ -98,7 +98,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
   // Instantiate Praesidio_MemoryShim module
   SoC_Map_IFC  soc_map  <- mkSoC_Map;
   //TODO what about reset?
-  Praesidio_MemoryShim#(TAdd#(Wd_IId,2), Wd_SId, Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
+  Praesidio_MemoryShim#(TAdd#(Wd_MId,2), Wd_SId, Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
                     rangeBase(soc_map.m_mem0_controller_addr_range),
                     rangeTop(soc_map.m_mem0_controller_addr_range),
                     rangeBase(soc_map.m_praesidio_conf_addr_range));
@@ -116,12 +116,12 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
   // AXI bus to funnel both cached and uncached accesses through Praesidio memory shim
 
   // Managers on the local 2x1 fabric
-  Vector#(2, AXI4_Manager #(TAdd#(Wd_IId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) manager_vector = newVector;
+  Vector#(2, AXI4_Manager #(TAdd#(Wd_MId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) manager_vector = newVector;
   manager_vector[0] = corew_cached_manager;
   manager_vector[1] = corew_uncached_manager;
 
   // Subordinates on the local 2x1 fabric
-  Vector#(1, AXI4_Subordinate #(TAdd#(Wd_IId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) subordinate_vector = newVector;
+  Vector#(1, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) subordinate_vector = newVector;
   subordinate_vector[0] = praesidio_shim.subordinate;
 
   Vector#(1, Bool) mergeRoute = replicate(True);
