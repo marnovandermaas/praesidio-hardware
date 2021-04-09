@@ -5,6 +5,7 @@
 package Praesidio_CoreWW;
 
 import Vector               :: *;
+import ClientServer         :: *;
 import PLIC                 :: *;
 import Fabric_Defs          :: *; // for Wd_Id, Wd_Addr, Wd_Data...
 import SoC_Map              :: *;
@@ -15,8 +16,12 @@ import Praesidio_MemoryShim :: *;
 import CoreW_IFC            :: *;
 import CoreW                :: *;
 
+`ifdef INCLUDE_GDB_CONTROL
+import Debug_Module         :: *;
+`endif
+
 `ifdef PERFORMANCE_MONITORING
-import Monitored :: *;
+import Monitored            :: *;
 `endif
 
 // ================================================================
