@@ -106,20 +106,6 @@ module mkPraesidio_MemoryShim
   // DEBUG //
   //////////////////////////////////////////////////////////////////////////////
   Bool debug = False;
-//  (* fire_when_enabled *)
-//  rule dbg (debug);
-//    Fmt dbg_str = $format("inAW.canPeek:\t ", fshow(inAW.canPeek))
-//                + $format("\toutAW.canPut:\t ", fshow(outAW.canPut))
-//                + $format("\n\tinW.canPeek:\t ", fshow(inW.canPeek))
-//                + $format("\toutW.canPut:\t ", fshow(outW.canPut))
-//                + $format("\n\tinB.canPut:\t ", fshow(inB.canPut))
-//                + $format("\toutB.canPeek:\t ", fshow(outB.canPeek))
-//                + $format("\n\tinAR.canPeek:\t ", fshow(inAR.canPeek))
-//                + $format("\toutAR.canPut:\t ", fshow(outAR.canPut))
-//                + $format("\n\tinR.canPut:\t ", fshow(inR.canPut))
-//                + $format("\toutR.canPeek:\t ", fshow(outR.canPeek));
-//    $display("%0t: ", $time, dbg_str);
-//  endrule
 
   // Common functions
   //////////////////////////////////////////////////////////////////////////////
@@ -150,27 +136,6 @@ module mkPraesidio_MemoryShim
 
   // Configuration
   //////////////////////////////////////////////////////////////////////////////
-//  rule initialize(!initialized);
-//    Bit#(addr_) allow_address = 'h80000000;
-//    bram.portA.request.put(BRAMRequest{
-//      write: True,
-//      responseOnWrite: False,
-//      address: get_bram_addr(allow_address),
-//      datain: 0
-//    });
-//    Bit#(addr_) block_address = 'h80730000;
-//    bram.portB.request.put(BRAMRequest{
-//      write: True,
-//      responseOnWrite: False,
-//      address: get_bram_addr(block_address),
-//      datain: get_bram_mask(block_address, True, True)
-//    });
-//    initialized <= True;
-//    if (debug) begin
-//      $display("%0t: initialize", $time);
-//    end
-//  endrule
-
   rule enq_config_write;
     //TODO check that manager ID matches before accepting request
     confAW.drop;
