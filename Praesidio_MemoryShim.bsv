@@ -140,7 +140,7 @@ module mkPraesidio_MemoryShim
 
   // Configuration
   //////////////////////////////////////////////////////////////////////////////
-  rule enq_config_write;
+  rule enq_config_write(awFF.isEmpty && !inAW.canPeek);
     //TODO check that manager ID matches before accepting request
     confAW.drop;
     confW.drop;
@@ -302,7 +302,7 @@ module mkPraesidio_MemoryShim
     awFF.enq(inAW.peek);
     wFF.enq(inW.peek);
     if(is_in_range(inAW.peek.awaddr) && initialized) begin
-      bram.portA.request.put(BRAMRequest{
+      bram.portB.request.put(BRAMRequest{
         write: False,
         responseOnWrite: False,
         address: get_bram_addr(inAW.peek.awaddr),
@@ -322,7 +322,7 @@ module mkPraesidio_MemoryShim
     BramWordType rsp = ?;
     BramWordType mask = ?;
     if(is_in_range(awFF.first.awaddr) && initialized) begin
-      rsp <- bram.portA.response.get;
+      rsp <- bram.portB.response.get;
       mask = get_bram_mask(awFF.first.awaddr, True, False);
       allowAccess = (rsp & mask) != 0;
     end
