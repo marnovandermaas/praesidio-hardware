@@ -102,6 +102,10 @@ module mkPraesidio_MemoryShim
   FIFOF #( AXI4_WFlit#(      data_,  wuser_))  confW_FF <- mkSizedFIFOF(internal_fifof_depth);
   // initialized register
   Reg #(Bool) initialized <- mkReg(False);
+  // write registers
+  Reg #(Bool) seenLast <- mkReg(True);
+  Reg #(Bool) writeApproved <- mkReg(False);
+  Reg #(Bit#(id_)) lastAWID <- mkReg('h00);
 
   // DEBUG //
   //////////////////////////////////////////////////////////////////////////////
@@ -331,19 +335,51 @@ module mkPraesidio_MemoryShim
                "\n\t", fshow(rsp),
                "\n\tAllow: ", fshow(allowAccess));
     end
+    seenLast <= wFF.first.wlast;
+    lastAWID <= awFF.first.awid;
     if(allowAccess || !is_in_range(awFF.first.awaddr) || !initialized) begin
       outAW.put(awFF.first);
       outW.put(wFF.first);
+      writeApproved <= True;
       if (debug) begin
         $display("\tForwarded request");
       end
-    end else begin
+    end else if (wFF.first.wlast) begin
       //Check whether buser should actually be 0
       bFF.enq(AXI4_BFlit { bid: awFF.first.awid, bresp: OKAY, buser: 0});
+      writeApproved <= False;
       if (debug) begin
-        $display("\tBlocked request");
+        $display("\tSent blocked response");
+      end
+    end else begin
+      writeApproved <= False;
+      if (debug) begin
+        $display("\tBlocking Request");
       end
     end
+  endrule
+
+  rule handle_write_burst(!inAW.canPeek && inW.canPeek && !seenLast);
+    if (debug) begin
+      $display("%0t: handle_write_burst", $time,
+               "\n\t", fshow(inW.peek),
+               "\n\t", fshow(lastAWID),
+               "\n\tAllow: ", fshow(writeApproved));
+    end
+    if (writeApproved) begin
+      outW.put(inW.peek);
+      if (debug) begin
+        $display("\tForwarded burst");
+      end
+    end else if (inW.peek.wlast) begin
+      //Check whether buser should actually be 0
+      bFF.enq(AXI4_BFlit { bid: lastAWID, bresp: OKAY, buser: 0});
+      if (debug) begin
+        $display("\tSent blocked response");
+      end
+    end
+    seenLast <= inW.peek.wlast;
+    inW.drop;
   endrule
 
   rule handle_write_rsp;
