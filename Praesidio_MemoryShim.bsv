@@ -140,7 +140,7 @@ module mkPraesidio_MemoryShim
 
   // Configuration
   //////////////////////////////////////////////////////////////////////////////
-  rule enq_config_write(awFF.isEmpty && !inAW.canPeek);
+  rule enq_config_write(!awFF.notEmpty && !inAW.canPeek);
     //TODO check that manager ID matches before accepting request
     confAW.drop;
     confW.drop;
