@@ -27,7 +27,7 @@ import Monitored            :: *;
 // ================================================================
 // Main interface
 
-interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources, numeric type t_n_subordinates);
+interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources);
 
    // ----------------------------------------------------------------
    // Debugging: set core's verbosity
@@ -42,7 +42,7 @@ interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources, numeric type t_
    // ----------------------------------------------------------------
    // AXI4 Fabric interface
 
-   interface AXI4_Manager #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
+   interface AXI4_Manager #(TAdd#(Wd_MId,3), Wd_Addr, Wd_Data,
                               0, 0, 0, 0, 0) cpu_mem_manager;
 
    // ----------------------------------------------------------------
@@ -89,18 +89,22 @@ endinterface
 
 (* synthesize *)
 module mkPraesidioCoreWW #(Reset dm_power_on_reset)
-               (Praesidio_CoreWW #(N_External_Interrupt_Sources, Wd_SId));
+               (Praesidio_CoreWW #(N_External_Interrupt_Sources));
   // ================================================================
   // Instantiate corew module
   CoreW_IFC #(N_External_Interrupt_Sources)  corew <- mkCoreW (dm_power_on_reset);
-  let corew_cached_manager = corew.cpu_imem_master;
+  let corew_cached_manager   = corew.cpu_imem_master;
   let corew_uncached_manager = corew.cpu_dmem_master;
+
+  CoreW_IFC #(N_External_Interrupt_Sources)  secure_corew <- mkCoreW (dm_power_on_reset);
+  let secure_cached_manager   = secure_corew.cpu_imem_master;
+  let secure_uncached_manager = secure_corew.cpu_dmem_master;
 
   // ================================================================
   // Instantiate Praesidio_MemoryShim module
   SoC_Map_IFC  soc_map  <- mkSoC_Map;
   //TODO what about reset?
-  Praesidio_MemoryShim#(TAdd#(Wd_MId,2), Wd_SId, Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
+  Praesidio_MemoryShim#(TAdd#(Wd_MId,2), TAdd#(Wd_MId,3), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
                     rangeBase(soc_map.m_mem0_controller_addr_range),
                     rangeTop(soc_map.m_mem0_controller_addr_range),
                     rangeBase(soc_map.m_praesidio_conf_addr_range));
@@ -130,29 +134,64 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
   mkAXI4Bus(constFn(mergeRoute), insecure_manager_vector, insecure_subordinate_vector);
 
   // ================================================================
-  // AXI bus to filter out the config requests for the memory shim
+  // AXI bus to merge both cached and uncached accesses to one manager
   AXI4_ManagerSubordinate_Shim #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
-     0, 0, 0, 0, 0) axiShim <- mkAXI4ManagerSubordinateShimFF;
+     0, 0, 0, 0, 0) secure_axi_shim <- mkAXI4ManagerSubordinateShimBypassFIFOF;
 
-  Vector#(1, AXI4_Manager #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
+  // Managers on the local 2x1 fabric
+  Vector#(2, AXI4_Manager #(TAdd#(Wd_MId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_manager_vector = newVector;
+  secure_manager_vector[0] = secure_cached_manager;
+  secure_manager_vector[1] = secure_uncached_manager;
+
+  // Subordinates on the local 2x1 fabric
+  Vector#(1, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_subordinate_vector = newVector;
+  secure_subordinate_vector[0] = secure_axi_shim.subordinate;
+
+  mkAXI4Bus(constFn(mergeRoute), secure_manager_vector, secure_subordinate_vector);
+
+  // ================================================================
+  // AXI bus to filter out the config requests for the memory shim
+  AXI4_ManagerSubordinate_Shim #(TAdd#(Wd_MId,3), Wd_Addr, Wd_Data,
+     0, 0, 0, 0, 0) mixed_axi_shim <- mkAXI4ManagerSubordinateShimFF;
+
+  Vector#(2, AXI4_Manager #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
                                       0, 0, 0, 0, 0))
     mixed_manager_vector = newVector;
   mixed_manager_vector[0] = unwrapped_manager;
+  mixed_manager_vector[1] = secure_axi_shim.manager;
 
-  Vector#(2, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
+  Vector#(3, AXI4_Subordinate #(TAdd#(Wd_MId,3), Wd_Addr, Wd_Data,
                                     0, 0, 0, 0, 0))
     mixed_subordinate_vector = newVector;
-  Vector#(2, Range#(Wd_Addr)) mixed_route_vector = newVector;
-  mixed_subordinate_vector[0] = axiShim.subordinate;
+  Vector#(3, Range#(Wd_Addr)) mixed_route_vector = newVector;
+  mixed_subordinate_vector[0] = mixed_axi_shim.subordinate;
   mixed_route_vector[0] = Range {
     base: soc_map.m_praesidio_conf_addr_range.base + soc_map.m_praesidio_conf_addr_range.size,
     size: 'h_FFFF_FFFF - soc_map.m_praesidio_conf_addr_range.base - soc_map.m_praesidio_conf_addr_range.size
   };
   mixed_subordinate_vector[1] = praesidio_shim.configSubordinate;
   mixed_route_vector[1] = soc_map.m_praesidio_conf_addr_range;
+  mixed_subordinate_vector[2] = mixed_axi_shim.subordinate;
+  mixed_route_vector[2] = Range {
+    base: 0,
+    size: soc_map.m_praesidio_conf_addr_range.base
+  };
 
   let bus <- mkAXI4Bus (routeFromMappingTable(mixed_route_vector),
                         mixed_manager_vector, mixed_subordinate_vector);
+
+  // ----------------
+  // Connect interrupt sources for secure cores
+
+  (* fire_when_enabled, no_implicit_conditions *)
+  rule rl_connect_external_interrupt_requests;
+    // Tie off remaining interrupt request lines (1..N)
+    for (Integer j = 0; j < valueOf (N_External_Interrupt_Sources); j = j + 1)
+      secure_corew.core_external_interrupt_sources [j].m_interrupt_req (False);
+
+    // Non-maskable interrupt request. [Tie-off; TODO: connect to genuine sources]
+    secure_corew.nmi_req (False);
+  endrule
 
   // ================================================================
   // Below this is just mapping methods and interfaces to corew except for cpu_mem_manager
@@ -160,7 +199,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
 
   method start = corew.start;
 
-  interface cpu_mem_manager = axiShim.manager;
+  interface cpu_mem_manager = mixed_axi_shim.manager;
 
   interface core_external_interrupt_sources = corew.core_external_interrupt_sources;
   
