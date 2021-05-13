@@ -45,9 +45,6 @@ interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources, numeric type t_
    interface AXI4_Manager #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
                               0, 0, 0, 0, 0) cpu_mem_manager;
 
-   interface AXI4_Subordinate #(t_n_subordinates, Wd_Addr, Wd_Data,
-                           0, 0, 0, 0, 0) praesidio_config_subordinate;
-
    // ----------------------------------------------------------------
    // External interrupt sources
 
@@ -121,16 +118,41 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
   // AXI bus to funnel both cached and uncached accesses through Praesidio memory shim
 
   // Managers on the local 2x1 fabric
-  Vector#(2, AXI4_Manager #(TAdd#(Wd_MId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) manager_vector = newVector;
-  manager_vector[0] = corew_cached_manager;
-  manager_vector[1] = corew_uncached_manager;
+  Vector#(2, AXI4_Manager #(TAdd#(Wd_MId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) insecure_manager_vector = newVector;
+  insecure_manager_vector[0] = corew_cached_manager;
+  insecure_manager_vector[1] = corew_uncached_manager;
 
   // Subordinates on the local 2x1 fabric
-  Vector#(1, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) subordinate_vector = newVector;
-  subordinate_vector[0] = praesidio_shim.subordinate;
+  Vector#(1, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) insecure_subordinate_vector = newVector;
+  insecure_subordinate_vector[0] = praesidio_shim.subordinate;
 
   Vector#(1, Bool) mergeRoute = replicate(True);
-  mkAXI4Bus(constFn(mergeRoute), manager_vector, subordinate_vector);
+  mkAXI4Bus(constFn(mergeRoute), insecure_manager_vector, insecure_subordinate_vector);
+
+  // ================================================================
+  // AXI bus to filter out the config requests for the memory shim
+  AXI4_ManagerSubordinate_Shim #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
+     0, 0, 0, 0, 0) axiShim <- mkAXI4ManagerSubordinateShimFF;
+
+  Vector#(1, AXI4_Manager #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
+                                      0, 0, 0, 0, 0))
+    mixed_manager_vector = newVector;
+  mixed_manager_vector[0] = unwrapped_manager;
+
+  Vector#(2, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
+                                    0, 0, 0, 0, 0))
+    mixed_subordinate_vector = newVector;
+  Vector#(2, Range#(Wd_Addr)) mixed_route_vector = newVector;
+  mixed_subordinate_vector[0] = axiShim.subordinate;
+  mixed_route_vector[0] = Range {
+    base: soc_map.m_praesidio_conf_addr_range.base + soc_map.m_praesidio_conf_addr_range.size,
+    size: 'h_FFFF_FFFF - soc_map.m_praesidio_conf_addr_range.base - soc_map.m_praesidio_conf_addr_range.size
+  };
+  mixed_subordinate_vector[1] = praesidio_shim.configSubordinate;
+  mixed_route_vector[1] = soc_map.m_praesidio_conf_addr_range;
+
+  let bus <- mkAXI4Bus (routeFromMappingTable(mixed_route_vector),
+                        mixed_manager_vector, mixed_subordinate_vector);
 
   // ================================================================
   // Below this is just mapping methods and interfaces to corew except for cpu_mem_manager
@@ -138,9 +160,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
 
   method start = corew.start;
 
-  interface cpu_mem_manager = unwrapped_manager;
-
-  interface praesidio_config_subordinate = praesidio_shim.configSubordinate;
+  interface cpu_mem_manager = axiShim.manager;
 
   interface core_external_interrupt_sources = corew.core_external_interrupt_sources;
   
