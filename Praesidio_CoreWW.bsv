@@ -8,13 +8,13 @@ import Vector               :: *;
 import ClientServer         :: *;
 import PLIC                 :: *;
 import Fabric_Defs          :: *; // for Wd_Id, Wd_Addr, Wd_Data...
-import SoC_Map              :: *;
-import AXI4                 :: *;
+import SoC_Map              :: *; // SoC_Map_IFC
+import AXI4                 :: *; // AXI4_Manager, AXI4_Subordinate...
 import Routable             :: *;
 import Connectable          :: *;
-import Praesidio_MemoryShim :: *;
+import Praesidio_MemoryShim :: *; // mkPraesidio_MemoryShim
 import CoreW_IFC            :: *;
-import CoreW                :: *;
+import CoreW                :: *; // mkCoreW
 
 `ifdef INCLUDE_GDB_CONTROL
 import Debug_Module         :: *;
