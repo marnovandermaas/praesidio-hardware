@@ -102,11 +102,12 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
                (Praesidio_CoreWW #(N_External_Interrupt_Sources));
   // ================================================================
   // Instantiate corew module
-  CoreW_IFC #(N_External_Interrupt_Sources)  corew <- mkCoreW (dm_power_on_reset);
+  CoreW_IFC #(N_External_Interrupt_Sources)  corew <- mkCoreW (dm_power_on_reset,
+  False);
   let corew_cached_manager   = corew.cpu_imem_master;
   let corew_uncached_manager = corew.cpu_dmem_master;
 
-  CoreW_IFC #(N_External_Interrupt_Sources)  secure_corew <- mkCoreW (dm_power_on_reset);
+  CoreW_IFC #(N_External_Interrupt_Sources)  secure_corew <- mkCoreW (dm_power_on_reset, True);
   let secure_cached_manager   = secure_corew.cpu_imem_master;
   let secure_uncached_manager = secure_corew.cpu_dmem_master;
 
