@@ -91,7 +91,14 @@ interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources);
 endinterface
 
 (* synthesize *)
-module mkPraesidioCoreWW #(Reset dm_power_on_reset)
+module mkPraesidioCoreWW_synth #(Reset dm_power_on_reset)
+               (Praesidio_CoreWW #(N_External_Interrupt_Sources));
+  SoC_Map_IFC soc_map <- mkSoC_Map;
+  let tmp <- mkPraesidioCoreWW(dm_power_on_reset, soc_map);
+  return tmp;
+endmodule
+
+module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
                (Praesidio_CoreWW #(N_External_Interrupt_Sources));
   // ================================================================
   // Instantiate corew module
@@ -105,7 +112,6 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset)
 
   // ================================================================
   // Instantiate Praesidio_MemoryShim module
-  SoC_Map_IFC  soc_map  <- mkSoC_Map;
   //TODO what about reset?
   Praesidio_MemoryShim#(TAdd#(Wd_MId,2), TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
                     rangeBase(soc_map.m_mem0_controller_addr_range),
