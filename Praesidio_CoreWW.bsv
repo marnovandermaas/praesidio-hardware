@@ -186,9 +186,15 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
 
   // ================================================================
   // Below this is just mapping methods and interfaces to corew except for cpu_mem_manager
-  method set_verbosity = corew.set_verbosity;
+  method Action set_verbosity (Bit #(4) verbosity, Bit #(64) logdelay);
+    corew.set_verbosity(verbosity, logdelay);
+    secure_corew.set_verbosity(verbosity, logdelay);
+  endmethod
 
-  method start = corew.start;
+  method Action start (Bool is_running, Bit #(64) tohost_addr, Bit #(64) fromhost_addr);
+    corew.start(is_running, tohost_addr, fromhost_addr);
+    secure_corew.start(is_running, 0, 0);
+  endmethod
 
   interface insecure_mem_manager = unwrapped_manager;
 
