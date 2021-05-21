@@ -15,6 +15,7 @@ import Connectable          :: *;
 import Praesidio_MemoryShim :: *; // mkPraesidio_MemoryShim
 import CoreW_IFC            :: *;
 import CoreW                :: *; // mkCoreW
+import Boot_ROM             :: *; // Boot_ROM_IFC, mkBoot_ROM
 
 `ifdef INCLUDE_GDB_CONTROL
 import Debug_Module         :: *;
@@ -101,15 +102,25 @@ endmodule
 module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
                (Praesidio_CoreWW #(N_External_Interrupt_Sources));
   // ================================================================
-  // Instantiate corew module
+  // Instantiate fast cores
   CoreW_IFC #(N_External_Interrupt_Sources)  corew <- mkCoreW (dm_power_on_reset,
   False);
   let corew_cached_manager   = corew.cpu_imem_master;
   let corew_uncached_manager = corew.cpu_dmem_master;
 
+  // ================================================================
+  // Instantiate secure cores
   CoreW_IFC #(N_External_Interrupt_Sources)  secure_corew <- mkCoreW (dm_power_on_reset, True);
   let secure_cached_manager   = secure_corew.cpu_imem_master;
   let secure_uncached_manager = secure_corew.cpu_dmem_master;
+
+  Boot_ROM_IFC  boot_rom <- mkBoot_ROM(True);
+  // AXI4 Deburster in front of Boot_ROM
+  AXI4_ManagerSubordinate_Shim#(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)
+    boot_rom_axi4_deburster <- mkBurstToNoBurst_ManagerSubordinate;
+  AXI4_Manager#(Wd_SId, Wd_Addr, Wd_Data_Periph, 0, 0, 0, 0, 0) extended_manager = extendIDFields(boot_rom_axi4_deburster.manager, 0);
+  let boot_rom_subordinate = boot_rom.slave;
+  mkConnection(extended_manager, boot_rom_subordinate);
 
   // ================================================================
   // Instantiate Praesidio_MemoryShim module
@@ -129,7 +140,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
 `endif
   
   // ================================================================
-  // AXI bus to funnel both cached and uncached accesses through Praesidio memory shim
+  // AXI bus to funnel both cached and uncached accesses from fast cores through Praesidio memory shim
 
   // Managers on the local 2x1 fabric
   Vector#(2, AXI4_Manager #(TAdd#(Wd_MId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) insecure_manager_vector = newVector;
@@ -144,7 +155,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
   mkAXI4Bus(constFn(mergeRoute), insecure_manager_vector, insecure_subordinate_vector);
 
   // ================================================================
-  // AXI bus to merge both cached and uncached accesses to one manager and filter out config requests for memory shim
+  // AXI bus to merge both cached and uncached accesses from secure cores to one manager and filter out config requests for memory shim
   AXI4_ManagerSubordinate_Shim #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
      0, 0, 0, 0, 0) secure_axi_shim <- mkAXI4ManagerSubordinateShimBypassFIFOF;
 
@@ -154,17 +165,19 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
   secure_manager_vector[1] = secure_uncached_manager;
 
   // Subordinates on the local 2x1 fabric
-  Vector#(3, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_subordinate_vector = newVector;
-  Vector#(3, Range#(Wd_Addr)) secure_route_vector = newVector;
-  secure_subordinate_vector[0] = secure_axi_shim.subordinate;
-  secure_route_vector[0] = Range {
-    base: 0,
-    size: soc_map.m_praesidio_conf_addr_range.base
+  Vector#(4, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_subordinate_vector = newVector;
+  Vector#(4, Range#(Wd_Addr)) secure_route_vector = newVector;
+  secure_subordinate_vector[0] = boot_rom_axi4_deburster.subordinate;
+  secure_route_vector[0] = soc_map.m_boot_rom_addr_range;
+  secure_subordinate_vector[1] = secure_axi_shim.subordinate;
+  secure_route_vector[1] = Range {
+    base: soc_map.m_boot_rom_addr_range.base + soc_map.m_boot_rom_addr_range.size,
+    size: soc_map.m_praesidio_conf_addr_range.base - soc_map.m_boot_rom_addr_range.base - soc_map.m_boot_rom_addr_range.size
   };
-  secure_subordinate_vector[1] = praesidio_shim.configSubordinate;
-  secure_route_vector[1] = soc_map.m_praesidio_conf_addr_range;
-  secure_subordinate_vector[2] = secure_axi_shim.subordinate;
-  secure_route_vector[2] = Range {
+  secure_subordinate_vector[2] = praesidio_shim.configSubordinate;
+  secure_route_vector[2] = soc_map.m_praesidio_conf_addr_range;
+  secure_subordinate_vector[3] = secure_axi_shim.subordinate;
+  secure_route_vector[3] = Range {
     base: soc_map.m_praesidio_conf_addr_range.base + soc_map.m_praesidio_conf_addr_range.size,
     size: 'h_FFFF_FFFF - soc_map.m_praesidio_conf_addr_range.base - soc_map.m_praesidio_conf_addr_range.size
   };
