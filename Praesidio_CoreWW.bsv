@@ -43,10 +43,10 @@ interface Praesidio_CoreWW #(numeric type t_n_interrupt_sources);
    // ----------------------------------------------------------------
    // AXI4 Fabric interfaces
 
-   interface AXI4_Manager #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
+   interface AXI4_Manager #(TAdd#(Wd_MId,4), Wd_Addr, Wd_Data,
                               0, 0, 0, 0, 0) insecure_mem_manager;
 
-   interface AXI4_Manager #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
+   interface AXI4_Manager #(TAdd#(Wd_MId,4), Wd_Addr, Wd_Data,
                               0, 0, 0, 0, 0) secure_mem_manager;
 
    // ----------------------------------------------------------------
@@ -156,8 +156,13 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
 
   // ================================================================
   // AXI bus to merge both cached and uncached accesses from secure cores to one manager and filter out config requests for memory shim
-  AXI4_ManagerSubordinate_Shim #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
-     0, 0, 0, 0, 0) secure_axi_shim <- mkAXI4ManagerSubordinateShimBypassFIFOF;
+  AXI4_ManagerSubordinate_Shim #(TAdd#(Wd_MId,4), Wd_Addr, Wd_Data,
+    0, 0, 0, 0, 0) secure_axi_shim <- mkAXI4ManagerSubordinateShimBypassFIFOF;
+  Vector#(3, AXI4_ManagerSubordinate_Shim #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
+    0, 0, 0, 0, 0)) internal_secure_axi_shim = newVector;
+  for (Integer i = 0; i < 3; i = i + 1) begin
+    internal_secure_axi_shim[i] <- mkAXI4ManagerSubordinateShimBypassFIFOF;
+  end
 
   // Managers on the local 2x1 fabric
   Vector#(2, AXI4_Manager #(TAdd#(Wd_MId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_manager_vector = newVector;
@@ -165,24 +170,45 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
   secure_manager_vector[1] = secure_uncached_manager;
 
   // Subordinates on the local 2x1 fabric
-  Vector#(4, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_subordinate_vector = newVector;
-  Vector#(4, Range#(Wd_Addr)) secure_route_vector = newVector;
-  secure_subordinate_vector[0] = boot_rom_axi4_deburster.subordinate;
-  secure_route_vector[0] = soc_map.m_boot_rom_addr_range;
-  secure_subordinate_vector[1] = secure_axi_shim.subordinate;
-  secure_route_vector[1] = Range {
-    base: soc_map.m_boot_rom_addr_range.base + soc_map.m_boot_rom_addr_range.size,
-    size: soc_map.m_praesidio_conf_addr_range.base - soc_map.m_boot_rom_addr_range.base - soc_map.m_boot_rom_addr_range.size
+  Vector#(5, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_subordinate_vector = newVector;
+  Vector#(5, Range#(Wd_Addr)) secure_route_vector = newVector;
+
+  secure_subordinate_vector[0] = internal_secure_axi_shim[0].subordinate;
+  secure_route_vector[0] = Range {
+    base: 'h_0000_0000,
+    size: soc_map.m_boot_rom_addr_range.base
   };
-  secure_subordinate_vector[2] = praesidio_shim.configSubordinate;
-  secure_route_vector[2] = soc_map.m_praesidio_conf_addr_range;
-  secure_subordinate_vector[3] = secure_axi_shim.subordinate;
-  secure_route_vector[3] = Range {
-    base: soc_map.m_praesidio_conf_addr_range.base + soc_map.m_praesidio_conf_addr_range.size,
-    size: 'h_FFFF_FFFF - soc_map.m_praesidio_conf_addr_range.base - soc_map.m_praesidio_conf_addr_range.size
+
+  secure_subordinate_vector[1] = boot_rom_axi4_deburster.subordinate;
+  secure_route_vector[1] = soc_map.m_boot_rom_addr_range;
+
+  secure_subordinate_vector[2] = internal_secure_axi_shim[1].subordinate;
+  let sec_boot_rom_top = soc_map.m_boot_rom_addr_range.base + soc_map.m_boot_rom_addr_range.size;
+  secure_route_vector[2] = Range {
+  base: sec_boot_rom_top,
+    size: soc_map.m_praesidio_conf_addr_range.base - sec_boot_rom_top
+  };
+
+  secure_subordinate_vector[3] = praesidio_shim.configSubordinate;
+  secure_route_vector[3] = soc_map.m_praesidio_conf_addr_range;
+
+  secure_subordinate_vector[4] = internal_secure_axi_shim[2].subordinate;
+  let praesidio_conf_top = soc_map.m_praesidio_conf_addr_range.base + soc_map.m_praesidio_conf_addr_range.size;
+  secure_route_vector[4] = Range {
+    base: praesidio_conf_top,
+    size: 'h_FFFF_FFFF - praesidio_conf_top
   };
 
   mkAXI4Bus(routeFromMappingTable(secure_route_vector), secure_manager_vector, secure_subordinate_vector);
+
+  Vector#(3, AXI4_Manager #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) shim_manager_vector = newVector;
+  for(Integer i = 0; i < 3; i = i + 1) begin
+    shim_manager_vector[i] = internal_secure_axi_shim[i].manager;
+  end
+  Vector#(1, AXI4_Subordinate #(TAdd#(Wd_MId,4), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) shim_subordinate_vector = newVector;
+  shim_subordinate_vector[0] = secure_axi_shim.subordinate;
+
+  mkAXI4Bus(constFn(mergeRoute), shim_manager_vector, shim_subordinate_vector);
 
   // ----------------
   // Connect interrupt sources for secure cores
@@ -209,7 +235,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
     secure_corew.start(is_running, 0, 0);
   endmethod
 
-  interface insecure_mem_manager = unwrapped_manager;
+  interface insecure_mem_manager = extendIDFields(unwrapped_manager, 0);
 
   interface secure_mem_manager = secure_axi_shim.manager;
 
