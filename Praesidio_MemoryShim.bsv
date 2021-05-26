@@ -55,6 +55,8 @@ typedef Bit#(BitsPerBramWord) BramWordType;
 typedef 12 PageBitOffset;
 typedef 13 BramAddressBits;
 
+typedef enum {IDLE, CONF_WRITE, WRITE_REQ, FINISH_WRITE} WriteState;
+
 module mkPraesidio_MemoryShim
     #(Bit#(addr_) start_address, Bit#(addr_) end_address, Bit#(addr_) conf_address)
     (Praesidio_MemoryShim #(id_, cid_, addr_, data_, awuser_, wuser_, buser_, aruser_, ruser_))
@@ -103,7 +105,7 @@ module mkPraesidio_MemoryShim
   // initialized register
   Reg #(Bool) initialized <- mkReg(False);
   // write registers
-  Reg #(Bool) seenLast <- mkReg(True);
+  Reg #(WriteState) writeState <- mkReg(IDLE);
   Reg #(Bool) writeApproved <- mkReg(False);
   Reg #(Bit#(id_)) lastAWID <- mkReg('h00);
 
@@ -140,7 +142,7 @@ module mkPraesidio_MemoryShim
 
   // Configuration
   //////////////////////////////////////////////////////////////////////////////
-  rule enq_config_write(!awFF.notEmpty && !inAW.canPeek);
+  rule enq_config_write(writeState == IDLE && !inAW.canPeek);
     //TODO check that manager ID matches before accepting request
     confAW.drop;
     confW.drop;
@@ -152,6 +154,7 @@ module mkPraesidio_MemoryShim
       address: get_bram_addr(truncate(confW.peek.wdata)),
       datain: 0
     });
+    writeState <= CONF_WRITE;
     if (debug) begin
       $display("%0t: enq_config_write", $time,
                "\n", fshow(confAW.peek),
@@ -159,7 +162,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule deq_config_write;
+  rule deq_config_write(writeState == CONF_WRITE);
     confAW_FF.deq;
     confW_FF.deq;
     let reqAddress = confAW_FF.first.awaddr;
@@ -298,7 +301,7 @@ module mkPraesidio_MemoryShim
 
   // Writes
   //////////////////////////////////////////////////////////////////////////////
-  rule enq_write_req;
+  rule enq_write_req(writeState == IDLE);
     awFF.enq(inAW.peek);
     wFF.enq(inW.peek);
     if(is_in_range(inAW.peek.awaddr) && initialized) begin
@@ -311,13 +314,14 @@ module mkPraesidio_MemoryShim
     end
     inAW.drop;
     inW.drop;
+    writeState <= WRITE_REQ;
     if (debug) begin
       $display("%0t: enq_write_req", $time,
                "\n", fshow(inAW.peek), "\n", fshow(inW.peek));
     end
   endrule
 
-  rule deq_write_req;
+  rule deq_write_req(writeState == WRITE_REQ);
     Bool allowAccess = False;
     BramWordType rsp = ?;
     BramWordType mask = ?;
@@ -335,7 +339,8 @@ module mkPraesidio_MemoryShim
                "\n\t", fshow(rsp),
                "\n\tAllow: ", fshow(allowAccess));
     end
-    seenLast <= wFF.first.wlast;
+    if(wFF.first.wlast) writeState == IDLE;
+    else writeState == FINISH_WRITE;
     lastAWID <= awFF.first.awid;
     if(allowAccess || !is_in_range(awFF.first.awaddr) || !initialized) begin
       outAW.put(awFF.first);
@@ -359,7 +364,7 @@ module mkPraesidio_MemoryShim
     end
   endrule
 
-  rule handle_write_burst(!inAW.canPeek && inW.canPeek && !seenLast);
+  rule handle_write_burst(writeState == FINISH_WRITE);
     if (debug) begin
       $display("%0t: handle_write_burst", $time,
                "\n\t", fshow(inW.peek),
@@ -378,7 +383,7 @@ module mkPraesidio_MemoryShim
         $display("\tSent blocked response");
       end
     end
-    seenLast <= inW.peek.wlast;
+    if(inW.peek.wlast) writeState <= IDLE;
     inW.drop;
   endrule
 
