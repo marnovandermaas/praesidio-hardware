@@ -55,7 +55,7 @@ typedef Bit#(BitsPerBramWord) BramWordType;
 typedef 12 PageBitOffset;
 typedef 13 BramAddressBits;
 
-typedef enum {IDLE, CONF_WRITE, WRITE_REQ, FINISH_WRITE} WriteState;
+typedef enum {IDLE, CONF_WRITE, WRITE_REQ, FINISH_WRITE} WriteState deriving (FShow, Bits, Eq);
 
 module mkPraesidio_MemoryShim
     #(Bit#(addr_) start_address, Bit#(addr_) end_address, Bit#(addr_) conf_address)
@@ -339,8 +339,8 @@ module mkPraesidio_MemoryShim
                "\n\t", fshow(rsp),
                "\n\tAllow: ", fshow(allowAccess));
     end
-    if(wFF.first.wlast) writeState == IDLE;
-    else writeState == FINISH_WRITE;
+    if(wFF.first.wlast) writeState <= IDLE;
+    else writeState <= FINISH_WRITE;
     lastAWID <= awFF.first.awid;
     if(allowAccess || !is_in_range(awFF.first.awaddr) || !initialized) begin
       outAW.put(awFF.first);
