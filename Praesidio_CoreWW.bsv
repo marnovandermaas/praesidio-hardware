@@ -165,24 +165,20 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
   secure_manager_vector[1] = secure_uncached_manager;
 
   // Subordinates on the local 2x1 fabric
-  Vector#(4, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_subordinate_vector = newVector;
-  Vector#(4, Range#(Wd_Addr)) secure_route_vector = newVector;
+  Vector#(3, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_subordinate_vector = newVector;
   secure_subordinate_vector[0] = boot_rom_axi4_deburster.subordinate;
-  secure_route_vector[0] = soc_map.m_boot_rom_addr_range;
-  secure_subordinate_vector[1] = secure_axi_shim.subordinate;
-  secure_route_vector[1] = Range {
-    base: soc_map.m_boot_rom_addr_range.base + soc_map.m_boot_rom_addr_range.size,
-    size: soc_map.m_praesidio_conf_addr_range.base - soc_map.m_boot_rom_addr_range.base - soc_map.m_boot_rom_addr_range.size
-  };
-  secure_subordinate_vector[2] = praesidio_shim.configSubordinate;
-  secure_route_vector[2] = soc_map.m_praesidio_conf_addr_range;
-  secure_subordinate_vector[3] = secure_axi_shim.subordinate;
-  secure_route_vector[3] = Range {
-    base: soc_map.m_praesidio_conf_addr_range.base + soc_map.m_praesidio_conf_addr_range.size,
-    size: 'h_FFFF_FFFF - soc_map.m_praesidio_conf_addr_range.base - soc_map.m_praesidio_conf_addr_range.size
-  };
+  secure_subordinate_vector[1] = praesidio_shim.configSubordinate;
+  secure_subordinate_vector[2] = secure_axi_shim.subordinate;
 
-  mkAXI4Bus(routeFromMappingTable(secure_route_vector), secure_manager_vector, secure_subordinate_vector);
+  function myRoute (addr);
+    let route = replicate (False);
+    if (inRange (soc_map.m_boot_rom_addr_range, addr)) route[0] = True;
+    else if (inRange (soc_map.m_praesidio_conf_addr_range, addr)) route[1] = True;
+    else route[2] = True;
+    return route;
+  endfunction
+
+  mkAXI4Bus(myRoute, secure_manager_vector, secure_subordinate_vector);
 
   // ----------------
   // Connect interrupt sources for secure cores
