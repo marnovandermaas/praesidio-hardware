@@ -121,6 +121,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
   AXI4_Manager#(Wd_SId, Wd_Addr, Wd_Data_Periph, 0, 0, 0, 0, 0) extended_manager = extendIDFields(boot_rom_axi4_deburster.manager, 0);
   let boot_rom_subordinate = boot_rom.slave;
   mkConnection(extended_manager, boot_rom_subordinate);
+  Reg#(Bool) initializing <- mkReg(True);
 
   // ================================================================
   // Instantiate Praesidio_MemoryShim module
@@ -179,6 +180,12 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
   endfunction
 
   mkAXI4Bus(myRoute, secure_manager_vector, secure_subordinate_vector);
+
+  rule rl_initialize_boot_rom(initializing);
+    boot_rom.set_addr_map(rangeBase(soc_map.m_boot_rom_addr_range),
+                          rangeTop(soc_map.m_boot_rom_addr_range));
+    initializing <= False;
+  endrule
 
   // ----------------
   // Connect interrupt sources for secure cores
