@@ -109,21 +109,6 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
   let corew_uncached_manager = corew.cpu_dmem_master;
 
   // ================================================================
-  // Instantiate secure cores
-  CoreW_IFC #(N_External_Interrupt_Sources)  secure_corew <- mkCoreW (dm_power_on_reset, True);
-  let secure_cached_manager   = secure_corew.cpu_imem_master;
-  let secure_uncached_manager = secure_corew.cpu_dmem_master;
-
-  Boot_ROM_IFC  boot_rom <- mkBoot_ROM(True);
-  // AXI4 Deburster in front of Boot_ROM
-  AXI4_ManagerSubordinate_Shim#(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)
-    boot_rom_axi4_deburster <- mkBurstToNoBurst_ManagerSubordinate;
-  AXI4_Manager#(Wd_SId, Wd_Addr, Wd_Data_Periph, 0, 0, 0, 0, 0) extended_manager = extendIDFields(boot_rom_axi4_deburster.manager, 0);
-  let boot_rom_subordinate = boot_rom.slave;
-  mkConnection(extended_manager, boot_rom_subordinate);
-  Reg#(Bool) initializing <- mkReg(True);
-
-  // ================================================================
   // Instantiate Praesidio_MemoryShim module
   //TODO what about reset?
   Praesidio_MemoryShim#(TAdd#(Wd_MId,2), TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) praesidio_shim <- mkPraesidio_MemoryShim(
@@ -158,34 +143,25 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
   // ================================================================
   // AXI bus to merge both cached and uncached accesses from secure cores to one manager and filter out config requests for memory shim
   AXI4_ManagerSubordinate_Shim #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
-     0, 0, 0, 0, 0) secure_axi_shim <- mkAXI4ManagerSubordinateShimBypassFIFOF;
+     0, 0, 0, 0, 0) filter_axi_shim <- mkAXI4ManagerSubordinateShimBypassFIFOF;
 
   // Managers on the local 2x1 fabric
-  Vector#(2, AXI4_Manager #(TAdd#(Wd_MId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_manager_vector = newVector;
-  secure_manager_vector[0] = secure_cached_manager;
-  secure_manager_vector[1] = secure_uncached_manager;
+  Vector#(1, AXI4_Manager #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) filter_manager_vector = newVector;
+  filter_manager_vector[0] = unwrapped_manager;
 
   // Subordinates on the local 2x1 fabric
-  Vector#(3, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_subordinate_vector = newVector;
-  secure_subordinate_vector[0] = boot_rom_axi4_deburster.subordinate;
-  secure_subordinate_vector[1] = praesidio_shim.configSubordinate;
-  secure_subordinate_vector[2] = secure_axi_shim.subordinate;
+  Vector#(2, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) filter_subordinate_vector = newVector;
+  filter_subordinate_vector[0] = praesidio_shim.configSubordinate;
+  filter_subordinate_vector[1] = filter_axi_shim.subordinate;
 
-  function myRoute (addr);
+  function filter_route (addr);
     let route = replicate (False);
-    if (inRange (soc_map.m_boot_rom_addr_range, addr)) route[0] = True;
-    else if (inRange (soc_map.m_praesidio_conf_addr_range, addr)) route[1] = True;
-    else route[2] = True;
+    if (inRange (soc_map.m_praesidio_conf_addr_range, addr)) route[0] = True;
+    else route[1] = True;
     return route;
   endfunction
 
-  mkAXI4Bus(myRoute, secure_manager_vector, secure_subordinate_vector);
-
-  rule rl_initialize_boot_rom(initializing);
-    boot_rom.set_addr_map(rangeBase(soc_map.m_boot_rom_addr_range),
-                          rangeTop(soc_map.m_boot_rom_addr_range));
-    initializing <= False;
-  endrule
+  mkAXI4Bus(filter_route, filter_manager_vector, filter_subordinate_vector);
 
   // ----------------
   // Connect interrupt sources for secure cores
@@ -212,9 +188,9 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
     secure_corew.start(is_running, 0, 0);
   endmethod
 
-  interface insecure_mem_manager = unwrapped_manager;
+  interface insecure_mem_manager = filter_axi_shim.manager;
 
-  interface secure_mem_manager = secure_axi_shim.manager;
+  interface secure_mem_manager = culDeSac;
 
   interface core_external_interrupt_sources = corew.core_external_interrupt_sources;
   
