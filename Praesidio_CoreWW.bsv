@@ -163,29 +163,14 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
 
   mkAXI4Bus(filter_route, filter_manager_vector, filter_subordinate_vector);
 
-  // ----------------
-  // Connect interrupt sources for secure cores
-
-  (* fire_when_enabled, no_implicit_conditions *)
-  rule rl_connect_external_interrupt_requests;
-    // Tie off remaining interrupt request lines (1..N)
-    for (Integer j = 0; j < valueOf (N_External_Interrupt_Sources); j = j + 1)
-      secure_corew.core_external_interrupt_sources [j].m_interrupt_req (False);
-
-    // Non-maskable interrupt request. [Tie-off; TODO: connect to genuine sources]
-    secure_corew.nmi_req (False);
-  endrule
-
   // ================================================================
   // Below this is just mapping methods and interfaces to corew except for cpu_mem_manager
   method Action set_verbosity (Bit #(4) verbosity, Bit #(64) logdelay);
     corew.set_verbosity(verbosity, logdelay);
-    secure_corew.set_verbosity(verbosity, logdelay);
   endmethod
 
   method Action start (Bool is_running, Bit #(64) tohost_addr, Bit #(64) fromhost_addr);
     corew.start(is_running, tohost_addr, fromhost_addr);
-    secure_corew.start(is_running, 0, 0);
   endmethod
 
   interface insecure_mem_manager = filter_axi_shim.manager;
