@@ -139,6 +139,11 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
 `else
   let unwrapped_manager = praesidio_shim.manager;
 `endif
+
+  Praesidio_MemoryShim#(TAdd#(Wd_MId,2), TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0) enclave_shim <- mkPraesidio_MemoryShim(
+                    rangeBase(soc_map.m_mem0_controller_addr_range),
+                    rangeTop(soc_map.m_mem0_controller_addr_range),
+                    rangeBase(soc_map.m_praesidio_conf_addr_range));
   
   // ================================================================
   // AXI bus to funnel both cached and uncached accesses from fast cores through Praesidio memory shim
@@ -157,8 +162,8 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
 
   // ================================================================
   // AXI bus to merge both cached and uncached accesses from secure cores to one manager and filter out config requests for memory shim
-  AXI4_ManagerSubordinate_Shim #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
-     0, 0, 0, 0, 0) secure_axi_shim <- mkAXI4ManagerSubordinateShimBypassFIFOF;
+  //AXI4_ManagerSubordinate_Shim #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data,
+  //   0, 0, 0, 0, 0) secure_axi_shim <- mkAXI4ManagerSubordinateShimBypassFIFOF;
 
   // Managers on the local 2x1 fabric
   Vector#(2, AXI4_Manager #(TAdd#(Wd_MId,1), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_manager_vector = newVector;
@@ -169,7 +174,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
   Vector#(3, AXI4_Subordinate #(TAdd#(Wd_MId,2), Wd_Addr, Wd_Data, 0, 0, 0, 0, 0)) secure_subordinate_vector = newVector;
   secure_subordinate_vector[0] = boot_rom_axi4_deburster.subordinate;
   secure_subordinate_vector[1] = praesidio_shim.configSubordinate;
-  secure_subordinate_vector[2] = secure_axi_shim.subordinate;
+  secure_subordinate_vector[2] = enclave_shim.subordinate;
 
   function myRoute (addr);
     let route = replicate (False);
@@ -214,7 +219,7 @@ module mkPraesidioCoreWW #(Reset dm_power_on_reset, SoC_Map_IFC soc_map)
 
   interface insecure_mem_manager = unwrapped_manager;
 
-  interface secure_mem_manager = secure_axi_shim.manager;
+  interface secure_mem_manager = enclave_shim.manager;
 
   interface core_external_interrupt_sources = corew.core_external_interrupt_sources;
   
